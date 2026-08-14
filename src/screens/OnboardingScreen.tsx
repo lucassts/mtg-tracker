@@ -149,7 +149,11 @@ export function OnboardingScreen() {
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      {/*
+        O app desenha por baixo das barras do sistema (edge-to-edge, padrão da
+        SDK 54). Sem a folga de baixo, o botão fica atrás dos botões do Android.
+      */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <Dots step={step} />
         <Pressable style={styles.cta} onPress={next}>
           <Text style={styles.ctaText}>
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
   },
   dotActive: { width: 20, backgroundColor: colors.ink },
   dotInactive: { width: 6, backgroundColor: colors.ink5 },
-  footer: { padding: 24, paddingTop: 12 },
+  footer: { paddingHorizontal: 24, paddingTop: 12 },
   cta: {
     backgroundColor: colors.ink,
     borderRadius: 12,

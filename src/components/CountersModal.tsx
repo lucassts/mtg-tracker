@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, Pressable, Modal, ScrollView, StyleSheet,
+  View, Text, Pressable, Modal, ScrollView, StyleSheet, Animated, PanResponder,
   NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -278,6 +278,52 @@ export function CountersModal({
     }
   };
 
+  /**
+   * Arrastar para baixo fecha a folha.
+   *
+   * O gesto vive só no cabeçalho de propósito: a página do jogador rola na
+   * vertical, e um PanResponder na folha inteira roubaria essa rolagem.
+   * A alça no topo é justamente a área que a pessoa já usa para isso.
+   */
+  const dragY = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (visible) dragY.setValue(0);
+  }, [visible, dragY]);
+
+  const dismiss = React.useCallback(() => {
+    Animated.timing(dragY, {
+      toValue: 600,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      dragY.setValue(0);
+      onClose();
+    });
+  }, [dragY, onClose]);
+
+  const dragHandlers = React.useMemo(
+    () => PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => {
+        // Só para baixo: puxar para cima não deve descolar a folha do fundo.
+        if (g.dy > 0) dragY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          dismiss();
+        } else {
+          Animated.spring(dragY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    }),
+    [dragY, dismiss]
+  );
+
   const patch = (idx: number, partial: Partial<PlayerCounters>) => {
     onCountersChange(prev => {
       const base = prev[idx] ?? emptyCounters();
@@ -322,13 +368,18 @@ export function CountersModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
-          {/* Cabeçalho */}
-          <View style={styles.header}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { paddingBottom: insets.bottom + 8, transform: [{ translateY: dragY }] },
+          ]}
+        >
+          {/* Cabeçalho — também é a alça de arrastar */}
+          <View style={styles.header} {...dragHandlers.panHandlers}>
             <View style={styles.grabber} />
             <View style={styles.headerRow}>
               <Text style={styles.title}>{c.title}</Text>
-              <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+              <Pressable onPress={dismiss} hitSlop={10} style={styles.closeBtn}>
                 <Text style={styles.closeText}>✕</Text>
               </Pressable>
             </View>
@@ -422,7 +473,7 @@ export function CountersModal({
           </ScrollView>
 
           <Text style={styles.swipeHint}>{c.swipeHint}</Text>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -530,19 +581,22 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
 
-  tabs: { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
+  tabs: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
+  // Círculo do mesmo diâmetro dos pips de mana — não uma pílula alongada.
   tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    width: 44,
+    height: 44,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   tabActive: { backgroundColor: '#d45f3c', borderColor: 'transparent' },
   tabText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     fontFamily: 'Inter',
     color: 'rgba(255,255,255,0.5)',
   },

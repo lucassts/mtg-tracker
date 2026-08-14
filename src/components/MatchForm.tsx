@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Match, Settings, MatchConfidence, ConfidenceLevel } from '../types';
 import { colors } from '../theme/colors';
 import { SegmentedControl } from './SegmentedControl';
@@ -68,6 +69,7 @@ export function MatchForm({
   conf = {},
 }: MatchFormProps) {
   const t = useT();
+  const insets = useSafeAreaInsets();
   const mf = t.matchForm;
   const resolvedTitle = title ?? mf.defaultTitle;
   const resolvedSubtitle = subtitle ?? mf.defaultSubtitle;
@@ -90,6 +92,19 @@ export function MatchForm({
 
   const venues = useStore(s => s.venues);
   const selectedVenue = venues.find(v => v.id === match.venueId);
+
+  // Versões do deck escolhido, se ele for um deck cadastrado.
+  const decks = useStore(s => s.decks);
+  const allVersions = useStore(s => s.deckVersions);
+  const deckVersions = React.useMemo(() => {
+    const name = (match.myDeck || '').trim().toLowerCase();
+    if (!name) return [];
+    const deck = decks.find(d => d.name.toLowerCase() === name);
+    if (!deck) return [];
+    return allVersions
+      .filter(v => v.deckId === deck.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [decks, allVersions, match.myDeck]);
 
   // Auto-preenche arquétipo a partir da database quando oppDeck muda
   React.useEffect(() => {
@@ -171,6 +186,42 @@ export function MatchForm({
           />
         </Field>
 
+        {/* Versão do deck — só aparece quando o deck escolhido tem versões */}
+        {deckVersions.length > 0 && (
+          <Field label={mf.deckVersion} conf={conf}>
+            <View style={styles.versionRow}>
+              <Pressable
+                onPress={() => set('deckVersion', undefined)}
+                style={[styles.versionChip, !match.deckVersion && styles.versionChipOn]}
+              >
+                <Text style={[
+                  styles.versionChipText,
+                  !match.deckVersion && styles.versionChipTextOn,
+                ]}>
+                  {mf.noVersion}
+                </Text>
+              </Pressable>
+              {deckVersions.map(v => (
+                <Pressable
+                  key={v.id}
+                  onPress={() => set('deckVersion', v.label)}
+                  style={[
+                    styles.versionChip,
+                    match.deckVersion === v.label && styles.versionChipOn,
+                  ]}
+                >
+                  <Text style={[
+                    styles.versionChipText,
+                    match.deckVersion === v.label && styles.versionChipTextOn,
+                  ]}>
+                    {v.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Field>
+        )}
+
         {/* Opponent deck */}
         <Field label={mf.oppDeck} confKey="oppDeck" conf={conf}>
           <DeckSelector
@@ -231,7 +282,8 @@ export function MatchForm({
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      <View style={styles.actions}>
+      {/* Folga da barra do Android: o formulário abre em modal, fora da tab bar. */}
+      <View style={[styles.actions, { paddingBottom: insets.bottom }]}>
         <Pressable style={styles.btnCancel} onPress={onCancel}>
           <Text style={styles.btnCancelText}>{mf.cancel}</Text>
         </Pressable>
@@ -323,6 +375,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlignVertical: 'top',
   },
+  versionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  versionChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bg2,
+  },
+  versionChipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  versionChipText: {
+    fontSize: 12,
+    fontFamily: 'Inter',
+    fontWeight: '500',
+    color: colors.ink3,
+  },
+  versionChipTextOn: { color: '#fff' },
   actions: {
     flexDirection: 'row',
     gap: 10,

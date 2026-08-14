@@ -7,6 +7,7 @@ import { Format } from '../types';
 import { getDeckSuggestions } from '../data/decks';
 import { Icon } from './Icon';
 import { useT } from '../i18n/useT';
+import { useStore } from '../store/useStore';
 
 interface DeckSelectorProps {
   value: string;
@@ -33,6 +34,25 @@ export function DeckSelector({
 
   const allSuggestions = getDeckSuggestions(format, recentDecks);
   const last5 = recentDecks.slice(0, 5);
+
+  // Decks que a pessoa cadastrou, para separá-los da base de arquétipos
+  // conhecidos — sem isso "Atraxa" seu e "Atraxa" do banco ficam idênticos.
+  const myDecks = useStore(s => s.decks);
+  const mine = React.useMemo(
+    () => new Set(myDecks.filter(d => !d.archived).map(d => d.name.toLowerCase())),
+    [myDecks]
+  );
+
+  const DeckRow = ({ deck }: { deck: string }) => (
+    <Pressable onPress={() => select(deck)} style={styles.item}>
+      <Text style={styles.itemText} numberOfLines={1}>{deck}</Text>
+      {mine.has(deck.toLowerCase()) && (
+        <View style={styles.mineTag}>
+          <Text style={styles.mineTagText}>{ds.mine}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
 
   const filtered = query.trim()
     ? allSuggestions.filter(d => d.toLowerCase().includes(query.toLowerCase()))
@@ -86,21 +106,13 @@ export function DeckSelector({
             {!query.trim() && last5.length > 0 && (
               <>
                 <Text style={styles.sectionLabel}>{ds.recent}</Text>
-                {last5.map(d => (
-                  <Pressable key={d} onPress={() => select(d)} style={styles.item}>
-                    <Text style={styles.itemText}>{d}</Text>
-                  </Pressable>
-                ))}
+                {last5.map(d => <DeckRow key={d} deck={d} />)}
                 <Text style={styles.sectionLabel}>{ds.allDecks}</Text>
               </>
             )}
             {filtered
               .filter(d => !last5.includes(d) || query.trim())
-              .map(d => (
-                <Pressable key={d} onPress={() => select(d)} style={styles.item}>
-                  <Text style={styles.itemText}>{d}</Text>
-                </Pressable>
-              ))}
+              .map(d => <DeckRow key={d} deck={d} />)}
             {filtered.length === 0 && (
               <Text style={styles.empty}>{ds.noResults}</Text>
             )}
@@ -168,12 +180,29 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.line2,
   },
+  mineTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: colors.accentSoft,
+  },
+  mineTagText: {
+    fontSize: 8.5,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.5,
+    paddingRight: 1,
+    color: colors.accent,
+  },
   itemText: {
+    flex: 1,
     fontSize: 12,
     color: colors.ink,
     fontFamily: 'Inter',
