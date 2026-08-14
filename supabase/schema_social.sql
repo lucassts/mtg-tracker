@@ -7,7 +7,11 @@
 --   · local do tipo "casa" nunca chega aqui — fica no aparelho;
 --   · a chave pública não lê nem escreve tabela direta: só chama função.
 
+-- pg_trgm: semelhança de nome, usada para deduplicar locais.
+-- pgcrypto: `gen_random_bytes`, usada para sortear o código do convite.
+--   `gen_random_uuid` é nativa desde o Postgres 13, `gen_random_bytes` não.
 create extension if not exists pg_trgm;
+create extension if not exists pgcrypto;
 
 -- ─── Jogadores ──────────────────────────────────────────────
 -- Uma linha por conta anônima. `display_name` é o apelido que a pessoa escolhe
