@@ -77,7 +77,7 @@ export function DeckSelector({
     <View style={styles.container}>
       <TextInput
         value={query}
-        placeholder={placeholder || 'Search or create deck…'}
+        placeholder={placeholder || ds.searchPlaceholder}
         placeholderTextColor={colors.ink4}
         onFocus={() => setOpen(true)}
         onChangeText={text => { setQuery(text); onChange(text); setOpen(true); }}

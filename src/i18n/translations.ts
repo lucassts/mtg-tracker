@@ -162,6 +162,7 @@ export const translations = {
       createFallback: 'novo deck',
       noResults: 'Nenhum resultado — use "Criar" acima.',
       mine: 'meu',
+      searchPlaceholder: 'Pesquise ou crie um deck…',
     },
     // Match Form
     matchForm: {
@@ -565,6 +566,7 @@ export const translations = {
       createFallback: 'new deck',
       noResults: 'No results — use "Create" above.',
       mine: 'mine',
+      searchPlaceholder: 'Search or create a deck…',
     },
     manageDecks: {
       back: 'Settings',
@@ -967,6 +969,7 @@ export const translations = {
       createFallback: '新しいデッキ',
       noResults: '結果なし — 上の「作成」を使ってください。',
       mine: '自分',
+      searchPlaceholder: 'デッキを検索または作成…',
     },
     manageDecks: {
       back: '設定',

@@ -9,6 +9,7 @@ import {
   MANA_COLORS, ManaColor, PlayerCounters, TableCounters, CounterPrefs,
 } from '../types';
 import { useT } from '../i18n/useT';
+import { Icon } from './Icon';
 import { scrollPagerTo } from '../utils/scrollPagerTo';
 
 /** Cor de cada pip de mana. Segue as cores canônicas do jogo, não a paleta do app. */
@@ -399,21 +400,26 @@ export function CountersModal({
               <Text style={styles.stormLabel}>{c.storm}</Text>
               <Text style={styles.stormHint}>{c.stormHint}</Text>
             </View>
+            {/*
+              Mesma mecânica dos pips de mana: o incremento é um círculo grande,
+              porque é o toque que se repete várias vezes no mesmo turno. O
+              decremento é o alvo pequeno ao lado, usado para corrigir engano.
+            */}
             <View style={styles.stormControls}>
               <Pressable
                 onPress={() => bumpStorm(-1)}
-                hitSlop={6}
-                style={[styles.stormBtn, table.storm === 0 && styles.stormBtnOff]}
+                hitSlop={10}
+                style={[styles.stormMinus, table.storm === 0 && styles.stormMinusOff]}
               >
-                <Text style={styles.stormBtnText}>−</Text>
+                <Text style={styles.stormMinusText}>−</Text>
               </Pressable>
               <Text style={styles.stormValue}>{table.storm}</Text>
               <Pressable
                 onPress={() => bumpStorm(1)}
                 hitSlop={6}
-                style={[styles.stormBtn, styles.stormBtnAccent]}
+                style={styles.stormPip}
               >
-                <Text style={styles.stormBtnText}>+</Text>
+                <Icon name="bolt" size={30} stroke="#fff" />
               </Pressable>
             </View>
           </View>
@@ -557,21 +563,29 @@ const styles = StyleSheet.create({
   stormHint: {
     fontSize: 11,
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.32)',
+    color: 'rgba(255,255,255,0.55)',
     marginTop: 2,
   },
-  stormControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stormBtn: {
-    width: 38,
-    height: 38,
+  stormControls: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // O raio ocupa o espaço que sobrava entre os dois botõezinhos de antes.
+  stormPip: {
+    width: 56,
+    height: 56,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#d45f3c',
+  },
+  stormMinus: {
+    width: 30,
+    height: 24,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  stormBtnAccent: { backgroundColor: '#d45f3c' },
-  stormBtnOff: { opacity: 0.35 },
-  stormBtnText: { color: '#fff', fontSize: 20, lineHeight: 23 },
+  stormMinusOff: { opacity: 0.3 },
+  stormMinusText: { color: 'rgba(255,255,255,0.65)', fontSize: 16, lineHeight: 18 },
   stormValue: {
     minWidth: 40,
     textAlign: 'center',
@@ -612,7 +626,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.62)',
   },
   tabTextActive: { color: '#fff' },
 
@@ -623,7 +637,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'JetBrainsMono',
     letterSpacing: 0.6,
-    color: 'rgba(255,255,255,0.22)',
+    color: 'rgba(255,255,255,0.42)',
     paddingTop: 6,
   },
 
@@ -645,19 +659,19 @@ const styles = StyleSheet.create({
     fontFamily: 'JetBrainsMono',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.58)',
   },
   blockHint: {
     fontSize: 11,
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.32)',
+    color: 'rgba(255,255,255,0.55)',
     marginTop: -4,
     lineHeight: 16,
   },
   allHiddenHint: {
     fontSize: 12,
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.32)',
+    color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 20,
@@ -668,7 +682,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'JetBrainsMono',
     letterSpacing: 0.6,
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.62)',
   },
 
   // Mana pips
@@ -693,7 +707,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.28)',
+    color: 'rgba(255,255,255,0.5)',
   },
   pipValueOn: { color: '#fff' },
   pipMinus: {

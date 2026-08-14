@@ -154,6 +154,11 @@ export function Icon({ name, size = 20, stroke = 'currentColor', strokeWidth = 1
         <Circle cx="12" cy="10" r="2.6" {...props} />
       </>
     ),
+    // Raio do storm. Preenchido, não contornado: em 24 px dentro de um círculo
+    // o traço vira um rabisco — a silhueta cheia é o que se reconhece.
+    bolt: (
+      <Polygon points="13 2 4 13.5 11 13.5 10 22 20 10.5 13 10.5" fill={stroke} stroke="none" />
+    ),
     coffee: (
       <>
         <Path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" {...props} />

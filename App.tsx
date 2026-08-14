@@ -6,6 +6,7 @@ import { AppState, View, Text, Pressable, StyleSheet } from 'react-native';
 import { registerRootComponent } from 'expo';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 
 import { TabNavigator } from './src/navigation/TabNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
@@ -70,6 +71,10 @@ function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
+        {/* O app tem uma paleta só, clara. Sem declarar isto, o Android decide
+            pelo tema do sistema e os ícones da barra saem brancos sobre fundo
+            claro — invisíveis para quem usa o celular no modo escuro. */}
+        <StatusBar style="dark" backgroundColor={colors.bg} />
         <View style={styles.root}>
           <AppRoot />
         </View>

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import { useScreenAwake } from '../hooks/useScreenAwake';
 import { Icon } from '../components/Icon';
 import { colors } from '../theme/colors';
@@ -77,6 +78,10 @@ export function LifeScreen() {
   // Modal cobre o app inteiro, não só esta aba. Sair da aba Vida com os
   // contadores abertos deixaria a folha por cima de Stats ou Configurações.
   useFocusEffect(React.useCallback(() => () => setShowCounters(false), []));
+
+  // Única tela de fundo escuro do app. O `isFocused` importa porque as abas
+  // ficam montadas: sem ele, esta declaração continuaria valendo nas outras.
+  const focused = useIsFocused();
   const [table, setTable] = React.useState<TableCounters>({ storm: 0 });
   const [counters, setCounters] = React.useState<Record<number, PlayerCounters>>({});
 
@@ -135,6 +140,7 @@ export function LifeScreen() {
   if (phase === 'setup') {
     return (
       <View style={[styles.setupPage, { paddingTop: insets.top }]}>
+        {focused && <StatusBar style="light" backgroundColor={colors.dark} />}
         <View style={styles.setupContent}>
           <View>
             <Text style={styles.setupLabel}>{lf.setupLabel}</Text>
@@ -196,6 +202,7 @@ export function LifeScreen() {
 
   return (
     <View style={styles.gamePage}>
+      {focused && <StatusBar style="light" backgroundColor={colors.lifeBg} />}
       {/* 2-player: rotated layout */}
       {is2p ? (
         <View style={{ flex: 1 }}>
