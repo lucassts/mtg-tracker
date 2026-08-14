@@ -1,0 +1,132 @@
+Nome do Deck,Formato,Arquétipo
+Turbo Doomsday,Legacy,Combo
+BUG Doomsday,Legacy,Combo-Control
+Esper Doomsday,Legacy,Combo-Control
+Meandeck Doomsday,Legacy,Combo
+Dryad Doomsday,Legacy,Combo-Midrange
+Grixis Delver,Legacy,Tempo
+RUG Delver (Temur),Legacy,Tempo
+UR Delver,Legacy,Tempo
+Jeskai Delver,Legacy,Tempo
+UW Delver,Legacy,Tempo
+UB Delver,Legacy,Tempo
+4C Delver,Legacy,Tempo
+Death and Taxes,Legacy,Tax/Aggro
+ANT (Ad Nauseam Tendrils),Legacy,Combo
+TES (The Epic Storm),Legacy,Combo
+Sneak and Show,Legacy,Combo
+Omni-Tell,Legacy,Combo
+Reanimator (BR),Legacy,Combo
+Reanimator (UB),Legacy,Combo-Control
+Elves (Cradle),Legacy,Combo-Aggro
+Lands (RG),Legacy,Combo-Control
+8-Cast,Legacy,Tempo/Value
+Goblins (Lackey),Legacy,Aggro-Combo
+Merfolk,Legacy,Aggro-Tempo
+Maverick (GW),Legacy,Midrange
+Punishing Jund,Legacy,Midrange
+Cloudpost (12-Post),Legacy,Big Mana
+Hogaak Depth,Legacy,Combo-Aggro
+Turbo Depths,Legacy,Combo
+Stiflenought (UW),Legacy,Aggro-Control
+Deadguy Ale,Legacy,Midrange/Discard
+The Rock (BG),Legacy,Midrange
+Painter's Servant (Shortcake),Legacy,Combo
+Mono-Red Prison,Legacy,Prison
+Sylvan Plug,Legacy,Prison
+Jund Midrange,Modern,Midrange
+Izzet Murktide,Modern,Tempo
+Mono-Green Tron,Modern,Big Mana
+Eldrazi Tron,Modern,Midrange/Big Mana
+Amulet Titan,Modern,Combo/Big Mana
+Living End,Modern,Combo
+Crashing Footfalls,Modern,Midrange/Tempo
+4C Omnath,Modern,Control/Midrange
+Grixis Shadow,Modern,Aggro-Control
+Jund Shadow,Modern,Aggro
+Rakdos Scam,Modern,Midrange
+Yawgmoth Evolution,Modern,Combo-Midrange
+Hammer Time,Modern,Aggro-Combo
+Burn (Boros),Modern,Aggro
+Azorius Control,Modern,Control
+Hardened Scales,Modern,Aggro-Combo
+Mill,Modern,Combo-Control
+Affinity (Classic),Modern,Aggro
+Dredge,Modern,Combo
+Scapeshift (RG),Modern,Combo
+Infect (UG),Modern,Aggro-Combo
+Lantern Control,Modern,Prison
+Whirza,Modern,Combo-Control
+Splinter Twin (UR),Modern (Banned),Combo-Control
+Birthing Pod,Modern (Banned),Midrange-Combo
+Izzet Phoenix,Pioneer,Tempo/Spells
+Rakdos Midrange,Pioneer,Midrange
+Mono-Green Devotion,Pioneer,Ramp/Combo
+Azorius Control,Pioneer,Control
+Abzan Greasefang,Pioneer,Combo
+Lotus Field Combo,Pioneer,Combo
+Boros Convoke,Pioneer,Aggro
+Dimir Control,Pioneer,Control
+Humans (Mono W),Pioneer,Aggro
+Spirits (Mono U),Pioneer,Tempo
+Niv-to-Light (5C),Pioneer,Midrange/Control
+Necropotence,Standard,Control
+ProsBloom,Standard,Combo
+Academy Combo,Standard,Combo
+Replenish,Standard,Combo
+Fires of Yavimaya,Standard,Aggro-Midrange
+Psychatog,Standard,Control-Combo
+Astral Slide,Standard,Control
+Ravager Affinity,Standard,Aggro
+Solar Flare,Standard,Control
+Dragonstorm,Standard,Combo
+Faeries (UB),Standard,Tempo-Control
+Jund Midrange,Standard,Midrange
+Caw-Blade (UW),Standard,Control
+Valakut Ramp,Standard,Big Mana
+Delver (UW),Standard,Tempo
+Mono-Black Devotion,Standard,Midrange-Control
+Abzan Siege Rhino,Standard,Midrange
+Temur Energy,Standard,Midrange
+Hazoret Red,Standard,Aggro
+Teferi Control,Standard,Control
+Oko Food,Standard,Midrange/Control
+Omnath Ramp,Standard,Big Mana/Combo
+Domain Ramp,Standard,Big Mana
+Paradoxical Outcome,Vintage,Combo-Control
+Tinker Citadel,Vintage,Combo
+Ravager Shops,Vintage,Aggro-Prison
+Golos Shops,Vintage,Prison
+Dredge (Bazaar),Vintage,Combo
+Oath of Druids,Vintage,Combo-Control
+Sultai Midrange,Vintage,Midrange
+White Initiative,Vintage,Aggro-Stompy
+Grixis Affinity,Pauper,Aggro-Midrange
+Mono-Blue Delver,Pauper,Tempo
+Izzet Skred,Pauper,Tempo-Control
+Boros Synthesizer,Pauper,Midrange
+Dimir Terror,Pauper,Control-Tempo
+Kuldotha Red,Pauper,Aggro
+Bogles,Pauper,Aggro-Combo
+Caw-Gates,Pauper,Control
+Blue Farm,cEDH,Midrange-Combo
+Najeela Tempo,cEDH,Aggro-Combo
+Winota Stax,cEDH,Stax/Aggro
+Kinnan Big Mana,cEDH,Midrange-Combo
+Magda Clock,cEDH,Combo-Stax
+Tivit Control,cEDH,Control-Combo
+Stella Lee Combo,cEDH,Combo
+Trix (Illusions/Donate),Premodern,Combo
+Stasis,Premodern,Prison
+Survival of the Fittest,Premodern,Midrange-Combo
+Sligh,Premodern,Aggro
+Goblins,Premodern,Aggro
+Psychatog,Premodern,Control
+The Rock,Premodern,Midrange
+Landstill (UW/UR),Premodern,Control
+Elves,Premodern,Combo-Aggro
+Threshold (UG/W),Premodern,Tempo
+Parfait,Premodern,Prison/Control
+Dreadnought (Stifle-Nought),Premodern,Aggro-Combo
+Devourer Combo,Premodern,Combo
+Burn,Premodern,Aggro

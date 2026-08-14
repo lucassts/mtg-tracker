@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "MTG Tracker",
+    "slug": "mtg-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f7f6f2"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mtgtracker.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "MTG Tracker usa o microfone para você descrever sua partida por voz.",
+        "NSSpeechRecognitionUsageDescription": "MTG Tracker processa sua voz localmente para extrair dados da partida."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f7f6f2"
+      },
+      "package": "com.mtgtracker.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "MTG Tracker usa o microfone para você descrever sua partida por voz."
+        }
+      ],
+      "llama.rn",
+      "expo-font"
+    ]
+  }
+}

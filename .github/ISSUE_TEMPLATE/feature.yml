@@ -1,0 +1,32 @@
+name: Ideia ou funcionalidade
+description: Sugerir algo novo
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Que problema isso resolve
+      description: Comece pelo incômodo, não pela solução. "Quando jogo Commander de 4, preciso de X porque Y."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: O que você imagina
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: O que você já tentou ou considerou
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: Procurei issues abertas e fechadas com o mesmo assunto
+          required: true
+        - label: Isto não exige coletar nenhum dado novo do usuário

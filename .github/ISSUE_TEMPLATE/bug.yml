@@ -1,0 +1,49 @@
+name: Bug
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: O que acontece
+      description: Descreva o comportamento observado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Abrir a aba Vida
+        2. Escolher 4 jogadores
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: O que era esperado
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Aparelho e versão do sistema
+      placeholder: Pixel 8, Android 15
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão do app ou commit
+      placeholder: 1.0.0 · ou o hash do commit
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Log, print ou qualquer outra coisa útil
+      description: Se colar log, remova antes qualquer dado pessoal.

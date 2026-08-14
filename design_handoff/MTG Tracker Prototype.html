@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MTG Tracker — Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#17160f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MTG Tracker" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles-hifi.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <template id="__bundler_thumbnail">
+    <svg viewBox="0 0 80 56" xmlns="http://www.w3.org/2000/svg">
+      <rect width="80" height="56" fill="#17160f" rx="8"/>
+      <circle cx="40" cy="28" r="16" fill="none" stroke="#d45f3c" stroke-width="2"/>
+      <rect x="36" y="18" width="8" height="14" rx="4" fill="#f7f6f2"/>
+      <path d="M33 28c0 4 3 7 7 7s7-3 7-7" stroke="#f7f6f2" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      <line x1="40" y1="35" x2="40" y2="39" stroke="#f7f6f2" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </template>
+</head>
+<body>
+  <div id="root"></div>
+
+  <div id="tweaks">
+    <h3>Tweaks</h3>
+    <div class="tw-row">Theme
+      <select id="tw-theme">
+        <option value="neutral">Neutral (default)</option>
+        <option value="cool">Cool gray</option>
+        <option value="warm">Warm beige</option>
+      </select>
+    </div>
+    <div class="tw-row">Accent color
+      <select id="tw-accent">
+        <option value="red">Warm red (default)</option>
+        <option value="violet">Violet</option>
+        <option value="green">Green</option>
+        <option value="amber">Amber</option>
+      </select>
+    </div>
+    <div class="tw-row">Skip onboarding
+      <input type="checkbox" id="tw-skip" />
+    </div>
+    <div class="tw-row">Reset prototype
+      <button id="tw-reset" class="btn btn-ghost" style="padding:4px 10px;font-size:11px">Reset</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="prototype/data.js"></script>
+  <script type="text/babel" src="prototype/ui.jsx"></script>
+  <script type="text/babel" src="prototype/screen-home.jsx"></script>
+  <script type="text/babel" src="prototype/screen-review.jsx"></script>
+  <script type="text/babel" src="prototype/screen-stats.jsx"></script>
+  <script type="text/babel" src="prototype/screen-other.jsx"></script>
+  <script type="text/babel" src="prototype/screen-life.jsx"></script>
+
+  <script type="text/babel">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "theme": "neutral",
+      "accent": "green",
+      "skipOnboarding": false
+    }/*EDITMODE-END*/;
+
+    const ACCENTS = {
+      red: 'oklch(0.62 0.16 28)',
+      violet: 'oklch(0.58 0.16 295)',
+      green: 'oklch(0.58 0.14 150)',
+      amber: 'oklch(0.72 0.15 75)',
+    };
+    const ACCENT_SOFT = {
+      red: 'oklch(0.95 0.03 28)',
+      violet: 'oklch(0.95 0.03 295)',
+      green: 'oklch(0.95 0.03 150)',
+      amber: 'oklch(0.95 0.03 75)',
+    };
+    const THEMES = {
+      neutral: { bg: '#f7f6f2', bg2: '#efede7', ink: '#17160f' },
+      cool: { bg: '#f3f4f5', bg2: '#e8eaec', ink: '#131518' },
+      warm: { bg: '#f8f3ea', bg2: '#efe7d5', ink: '#1d1811' },
+    };
+
+    function App() {
+      const [tweaks, setTweaks] = React.useState(() => {
+        const s = localStorage.getItem('mtg-tw');
+        return s ? { ...TWEAK_DEFAULTS, ...JSON.parse(s) } : TWEAK_DEFAULTS;
+      });
+      React.useEffect(() => { localStorage.setItem('mtg-tw', JSON.stringify(tweaks)); }, [tweaks]);
+
+      // Apply theme vars
+      React.useEffect(() => {
+        const root = document.documentElement;
+        root.style.setProperty('--accent', ACCENTS[tweaks.accent]);
+        root.style.setProperty('--accent-soft', ACCENT_SOFT[tweaks.accent]);
+        const t = THEMES[tweaks.theme];
+        root.style.setProperty('--bg', t.bg);
+        root.style.setProperty('--bg-2', t.bg2);
+      }, [tweaks]);
+
+      const [matches, setMatches] = React.useState(() => {
+        const s = localStorage.getItem('mtg-matches');
+        return s ? JSON.parse(s) : seedMatches();
+      });
+      React.useEffect(() => { localStorage.setItem('mtg-matches', JSON.stringify(matches)); }, [matches]);
+
+      const [settings, setSettings] = React.useState(() => {
+        const s = localStorage.getItem('mtg-settings');
+        return s ? JSON.parse(s) : { defaultFormat: 'Commander', defaultDeck: 'Atraxa', shareAnon: true, onboarded: false };
+      });
+      React.useEffect(() => { localStorage.setItem('mtg-settings', JSON.stringify(settings)); }, [settings]);
+
+      const [screen, setScreen] = React.useState(() => {
+        return localStorage.getItem('mtg-screen') || 'home';
+      });
+      React.useEffect(() => { localStorage.setItem('mtg-screen', screen); }, [screen]);
+
+      const onboarded = settings.onboarded || tweaks.skipOnboarding;
+
+      // Tweaks panel wiring
+      React.useEffect(() => {
+        const panel = document.getElementById('tweaks');
+        const onMsg = e => {
+          const d = e.data || {};
+          if (d.type === '__activate_edit_mode') panel.classList.add('open');
+          if (d.type === '__deactivate_edit_mode') panel.classList.remove('open');
+        };
+        window.addEventListener('message', onMsg);
+        window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+        const $theme = document.getElementById('tw-theme');
+        const $accent = document.getElementById('tw-accent');
+        const $skip = document.getElementById('tw-skip');
+        const $reset = document.getElementById('tw-reset');
+        $theme.value = tweaks.theme;
+        $accent.value = tweaks.accent;
+        $skip.checked = tweaks.skipOnboarding;
+        const setK = (k, v) => {
+          setTweaks(t => ({ ...t, [k]: v }));
+          window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+        };
+        const onTheme = e => setK('theme', e.target.value);
+        const onAccent = e => setK('accent', e.target.value);
+        const onSkip = e => setK('skipOnboarding', e.target.checked);
+        const onReset = () => {
+          localStorage.removeItem('mtg-matches');
+          localStorage.removeItem('mtg-settings');
+          localStorage.removeItem('mtg-screen');
+          location.reload();
+        };
+        $theme.addEventListener('change', onTheme);
+        $accent.addEventListener('change', onAccent);
+        $skip.addEventListener('change', onSkip);
+        $reset.addEventListener('click', onReset);
+        return () => {
+          window.removeEventListener('message', onMsg);
+          $theme.removeEventListener('change', onTheme);
+          $accent.removeEventListener('change', onAccent);
+          $skip.removeEventListener('change', onSkip);
+          $reset.removeEventListener('click', onReset);
+        };
+      }, [tweaks]);
+
+      const handleOnboardDone = (prefs) => {
+        setSettings(s => ({ ...s, ...prefs, onboarded: true }));
+      };
+
+      const handleMatchCaptured = () => {
+        setScreen('review');
+      };
+
+      const handleDirectSave = (match) => {
+        const newMatch = { id: 'm' + Date.now(), date: new Date().toISOString(), ...match };
+        setMatches(prev => [newMatch, ...prev]);
+        setScreen('history');
+      };
+
+      const handleSave = (match) => {
+        const newMatch = { id: 'm' + Date.now(), date: new Date().toISOString(), ...match };
+        setMatches(prev => [newMatch, ...prev]);
+        setScreen('history');
+      };
+
+      const handleUpdateMatch = (updated) => {
+        setMatches(prev => prev.map(m => m.id === updated.id ? updated : m));
+      };
+
+      // Recent decks: last 5 unique my-deck values
+      const recentDecks = React.useMemo(() =>
+        [...new Set(matches.map(m => m.myDeck).filter(Boolean))].slice(0, 5),
+        [matches]
+      );
+
+      const renderScreen = () => {
+        if (screen === 'life') return <LifeScreen settings={settings} />;
+        if (screen === 'review') return <ReviewScreen settings={settings} recentDecks={recentDecks} onSave={handleSave} onCancel={() => setScreen('home')} />;
+        if (screen === 'stats') return <StatsScreen matches={matches} />;
+        if (screen === 'history') return <HistoryScreen matches={matches} settings={settings} recentDecks={recentDecks} onUpdateMatch={handleUpdateMatch} />;
+        if (screen === 'settings') return <SettingsScreen settings={settings} matches={matches} onChange={(newSettings) => {
+          // Handle deck renames: if deckRenames changed, apply to all matches
+          if (newSettings.deckRenames) {
+            const renames = newSettings.deckRenames;
+            const prevRenames = settings.deckRenames || {};
+            const newRenames = Object.keys(renames).filter(k => renames[k] !== prevRenames[k]);
+            if (newRenames.length > 0) {
+              setMatches(prev => prev.map(m => {
+                let updated = { ...m };
+                newRenames.forEach(oldName => {
+                  if (m.myDeck === oldName) updated.myDeck = renames[oldName];
+                  if (m.oppDeck === oldName) updated.oppDeck = renames[oldName];
+                });
+                return updated;
+              }));
+            }
+          }
+          setSettings(newSettings);
+        }} onImport={(imported) => setMatches(prev => { const existingIds = new Set(prev.map(m => m.id)); const fresh = imported.filter(m => !existingIds.has(m.id)); return [...fresh, ...prev].sort((a,b) => new Date(b.date) - new Date(a.date)); })} />;
+        return <HomeScreen settings={settings} recentDecks={recentDecks} onMatchCaptured={handleMatchCaptured} onDirectSave={handleDirectSave} onNav={setScreen} />;
+      };
+
+      const showTabs = screen !== 'review';
+      const tabDark = screen === 'life';
+
+      if (!onboarded) {
+        return (
+          <div className="app-stage">
+            <Phone>
+              <OnboardingScreen onDone={handleOnboardDone} />
+            </Phone>
+          </div>
+        );
+      }
+
+      return (
+        <div className="app-stage">
+          <Phone>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              {renderScreen()}
+            </div>
+            {showTabs && <TabBar active={screen} onNav={setScreen} dark={tabDark} />}
+          </Phone>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+/**
+ * StatsShareCard
+ * Card visual capturado como imagem para compartilhamento em redes sociais.
+ * Tamanho fixo: 360 × 460 lógicos (→ ~1080×1380 a 3× DPR).
+ * Deve ser renderizado dentro de um View mensurável para captureRef funcionar.
+ */
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+import { ComputedStats, Filters } from '../types';
+
+interface Props {
+  stats: ComputedStats;
+  filters: Filters;
+  /** Rótulo traduzido do período atual (ex: "Últimos 30 dias") */
+  periodLabel: string;
+  /** Rótulo traduzido de vitória (ex: "V") */
+  winLabel: string;
+  /** Rótulo traduzido de derrota (ex: "D") */
+  lossLabel: string;
+}
+
+// ── Mini donut ring ──────────────────────────────────────────────────────────
+function MiniRing({ value, size = 80 }: { value: number; size?: number }) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const filled = (value / 100) * circ;
+  const cx = size / 2;
+  const cy = size / 2;
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {/* Track */}
+      <Circle cx={cx} cy={cy} r={r} stroke="rgba(255,255,255,0.1)" strokeWidth={6} fill="none" />
+      {/* Fill */}
+      <Circle
+        cx={cx} cy={cy} r={r}
+        stroke="#d45f3c"
+        strokeWidth={6}
+        fill="none"
+        strokeDasharray={`${filled} ${circ - filled}`}
+        strokeDashoffset={circ / 4}
+        strokeLinecap="round"
+        rotation={-90}
+        origin={`${cx}, ${cy}`}
+      />
+    </Svg>
+  );
+}
+
+// ── Stat chip ────────────────────────────────────────────────────────────────
+function StatChip({ value, label, accent }: { value: string | number; label: string; accent?: boolean }) {
+  return (
+    <View style={chipStyles.wrap}>
+      <Text style={[chipStyles.value, accent && chipStyles.valueAccent]}>{value}</Text>
+      <Text style={chipStyles.label}>{label}</Text>
+    </View>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    minWidth: 72,
+  },
+  value: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    color: '#fff',
+    lineHeight: 26,
+  },
+  valueAccent: { color: '#d45f3c' },
+  label: {
+    fontSize: 8,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 2,
+  },
+});
+
+// ── Play / Draw bar ──────────────────────────────────────────────────────────
+function PlayDrawBar({
+  onPlay, onDraw, playLabel, drawLabel,
+}: { onPlay: number; onDraw: number; playLabel: string; drawLabel: string }) {
+  const total = onPlay + onDraw;
+  const playRatio = total ? onPlay / total : 0.5;
+  return (
+    <View style={barStyles.wrap}>
+      <Text style={barStyles.pct}>{onPlay}%</Text>
+      <Text style={barStyles.side}>{playLabel}</Text>
+      {/* Bar */}
+      <View style={barStyles.track}>
+        <View style={[barStyles.fill, { flex: playRatio }]} />
+        <View style={{ flex: 1 - playRatio }} />
+      </View>
+      <Text style={barStyles.side}>{drawLabel}</Text>
+      <Text style={barStyles.pct}>{onDraw}%</Text>
+    </View>
+  );
+}
+
+const barStyles = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+  },
+  side: {
+    fontSize: 8,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.4)',
+    width: 36,
+    textAlign: 'center',
+  },
+  pct: {
+    fontSize: 11,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+    width: 32,
+    textAlign: 'center',
+  },
+  track: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  fill: {
+    backgroundColor: '#d45f3c',
+    borderRadius: 2,
+  },
+});
+
+// ── Main card ────────────────────────────────────────────────────────────────
+
+export const SHARE_CARD_WIDTH = 360;
+export const SHARE_CARD_HEIGHT = 460;
+
+export function StatsShareCard({ stats, filters, periodLabel, winLabel, lossLabel }: Props) {
+  const streakSign = stats.streakType ? '+' : '';
+  const streakColor = stats.streakType ? '#2d8a5e' : '#c0422a';
+
+  // Contexto de filtro para mostrar no card
+  const contextParts: string[] = [];
+  if (filters.format && filters.format !== 'All') contextParts.push(filters.format);
+  if (filters.deck.length === 1) contextParts.push(filters.deck[0]);
+  else if (filters.deck.length > 1) contextParts.push(`${filters.deck.length} decks`);
+  if (filters.oppDeck.length === 1) contextParts.push(`vs ${filters.oppDeck[0]}`);
+  else if (filters.oppDeck.length > 1) contextParts.push(`vs ${filters.oppDeck.length} decks`);
+  contextParts.push(periodLabel);
+  const contextLine = contextParts.join('  ·  ');
+
+  return (
+    <View style={styles.card}>
+      {/* Gradient-like dark overlay strips */}
+      <View style={styles.stripTop} />
+      <View style={styles.stripBottom} />
+
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.appName}>MTG TRACKER</Text>
+          <Text style={styles.context} numberOfLines={2}>{contextLine}</Text>
+        </View>
+        {/* Accent dot */}
+        <View style={styles.accentDot} />
+      </View>
+
+      {/* ── Win Rate Hero ── */}
+      <View style={styles.hero}>
+        <View style={styles.ringWrap}>
+          <MiniRing value={stats.wr} size={96} />
+          <View style={styles.ringCenter}>
+            <Text style={styles.wrNum}>{stats.wr}</Text>
+            <Text style={styles.wrPct}>%</Text>
+          </View>
+        </View>
+        <Text style={styles.wrLabel}>WIN RATE</Text>
+      </View>
+
+      {/* ── Stats chips ── */}
+      <View style={styles.chips}>
+        <StatChip value={stats.wins} label={winLabel} />
+        <StatChip value={stats.losses} label={lossLabel} />
+        <StatChip value={stats.total} label="TOTAL" />
+        <StatChip
+          value={`${streakSign}${stats.streak}`}
+          label="STREAK"
+          accent={stats.streak > 0}
+        />
+      </View>
+
+      {/* ── Play / Draw ── */}
+      <View style={styles.section}>
+        <PlayDrawBar
+          onPlay={stats.onPlayWR}
+          onDraw={stats.onDrawWR}
+          playLabel="COMEÇA"
+          drawLabel="SACA"
+        />
+      </View>
+
+      {/* ── Top decks (se houver) ── */}
+      {stats.decks.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>TOP DECKS</Text>
+          <View style={styles.deckRows}>
+            {stats.decks.slice(0, 3).map(d => (
+              <View key={d.l} style={styles.deckRow}>
+                <Text style={styles.deckName} numberOfLines={1}>{d.l}</Text>
+                <Text style={[styles.deckWr, { color: d.wr >= 50 ? '#2d8a5e' : '#c0422a' }]}>
+                  {d.wr}%
+                </Text>
+                <Text style={styles.deckRecord}>{d.wins}V·{d.losses}D</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* ── Divider ── */}
+      <View style={styles.divider} />
+
+      {/* ── Footer ── */}
+      <View style={styles.footer}>
+        <View style={styles.accentDotSmall} />
+        <Text style={styles.footerText}>mtg-tracker · on-device · no cloud</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    width: SHARE_CARD_WIDTH,
+    height: SHARE_CARD_HEIGHT,
+    backgroundColor: '#16150f',
+    borderRadius: 0, // capturado sem bordas para visual limpo
+    padding: 24,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  // Decorações de fundo
+  stripTop: {
+    position: 'absolute',
+    top: -60,
+    right: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(212, 95, 60, 0.07)',
+  },
+  stripBottom: {
+    position: 'absolute',
+    bottom: -40,
+    left: -40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(212, 95, 60, 0.05)',
+  },
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  appName: {
+    fontSize: 11,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 2,
+    color: '#d45f3c',
+    fontWeight: '700',
+  },
+  context: {
+    fontSize: 9,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.4,
+    color: 'rgba(255,255,255,0.35)',
+    marginTop: 4,
+    maxWidth: 280,
+    lineHeight: 14,
+  },
+  accentDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#d45f3c',
+    marginTop: 2,
+  },
+  // Win rate hero
+  hero: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  ringWrap: {
+    position: 'relative',
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringCenter: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  wrNum: {
+    fontSize: 30,
+    fontWeight: '800',
+    fontFamily: 'Inter',
+    color: '#fff',
+    letterSpacing: -1,
+  },
+  wrPct: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    color: '#d45f3c',
+    marginLeft: 1,
+  },
+  wrLabel: {
+    fontSize: 9,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 2,
+    color: 'rgba(255,255,255,0.35)',
+  },
+  // Chips
+  chips: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  // Section
+  section: {
+    gap: 6,
+  },
+  sectionLabel: {
+    fontSize: 8,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 1,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  // Deck rows
+  deckRows: { gap: 4 },
+  deckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deckName: {
+    flex: 1,
+    fontSize: 10,
+    fontFamily: 'Inter',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  deckWr: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    width: 34,
+    textAlign: 'right',
+  },
+  deckRecord: {
+    fontSize: 9,
+    fontFamily: 'JetBrainsMono',
+    color: 'rgba(255,255,255,0.3)',
+    width: 44,
+    textAlign: 'right',
+  },
+  // Footer
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accentDotSmall: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#d45f3c',
+  },
+  footerText: {
+    fontSize: 8,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    color: 'rgba(255,255,255,0.2)',
+  },
+});

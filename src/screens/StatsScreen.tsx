@@ -1,0 +1,477 @@
+import React from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../theme/colors';
+import { useStore } from '../store/useStore';
+import { applyFilters, computeStats } from '../utils/stats';
+import { Filters } from '../types';
+import { ChartDonut } from '../components/charts/ChartDonut';
+import { ChartLine } from '../components/charts/ChartLine';
+import { ChartSplit } from '../components/charts/ChartSplit';
+import { ChartBars } from '../components/charts/ChartBars';
+import { DeckList } from '../components/charts/DeckList';
+import { FilterPickerModal } from '../components/FilterPickerModal';
+import { StatsShareModal } from '../components/StatsShareModal';
+import { Icon } from '../components/Icon';
+import { useT } from '../i18n/useT';
+
+const defaultFilters: Filters = {
+  format: 'All',
+  deck: [],
+  oppDeck: [],
+  period: 'All',
+  result: 'All',
+};
+
+// ─── Chip — para filtros simples (format, period, result) ──────────────────
+
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function FilterRow({ label, value, options, onChange }: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <View style={styles.filterRow}>
+      <Text style={styles.filterLabel}>{label}</Text>
+      <View style={styles.chips}>
+        {options.map(opt => (
+          <Chip key={opt.value} label={opt.label} active={value === opt.value} onPress={() => onChange(opt.value)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ─── FilterPickerButton — abre modal com lista de decks ───────────────────
+
+function FilterPickerButton({ label, value, displayValue, onPress }: {
+  label: string;
+  value: string[];
+  displayValue: string;
+  onPress: () => void;
+}) {
+  const isFiltered = value.length > 0;
+  return (
+    <View style={styles.filterRow}>
+      <Text style={styles.filterLabel}>{label}</Text>
+      <Pressable onPress={onPress} style={[styles.pickerBtn, isFiltered && styles.pickerBtnActive]}>
+        <Text
+          style={[styles.pickerBtnText, isFiltered && styles.pickerBtnTextActive]}
+          numberOfLines={1}
+        >
+          {displayValue}
+        </Text>
+        <Icon
+          name="chev"
+          size={12}
+          stroke={isFiltered ? colors.accent : colors.ink3}
+          strokeWidth={2}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── ChartCard ─────────────────────────────────────────────────────────────
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.chart}>
+      <View style={styles.chartHeader}>
+        <Text style={styles.chartTitle}>{title}</Text>
+        {subtitle && <Text style={styles.chartSub}>{subtitle}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// ─── StatsScreen ───────────────────────────────────────────────────────────
+
+export function StatsScreen() {
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const t = useT();
+  const s = t.stats;
+  // page padding 20×2 + card padding 12×2 = 64px
+  const chartW = screenWidth - 64;
+  const matches = useStore(st => st.matches);
+  const [filters, setFilters] = React.useState<Filters>(defaultFilters);
+
+  // Qual modal está aberto: null | 'deck' | 'oppDeck' | 'share'
+  const [openModal, setOpenModal] = React.useState<null | 'deck' | 'oppDeck' | 'share'>(null);
+
+  const filtered = React.useMemo(() => applyFilters(matches, filters), [matches, filters]);
+  const stats = React.useMemo(() => computeStats(filtered), [filtered]);
+
+  // Options — chips (format, period, result)
+  const allOpt = { value: 'All', label: s.all };
+  const formats = [allOpt, ...Array.from(new Set(matches.map(m => m.format))).map(f => ({ value: f, label: f }))];
+  // Opções de deck SEM o "Todos" (o modal multi-select gera o "Todos" internamente)
+  const deckOptions = Array.from(new Set(matches.map(m => m.myDeck).filter(Boolean))).sort().map(d => ({ value: d, label: d }));
+  const oppDeckOptions = Array.from(new Set(matches.map(m => m.oppDeck).filter(Boolean))).sort().map(d => ({ value: d, label: d }));
+  const periods = [
+    allOpt,
+    { value: '1d', label: s.today },
+    { value: '7d', label: '7d' },
+    { value: '30d', label: '30d' },
+    { value: '90d', label: '90d' },
+  ];
+  const results = [
+    allOpt,
+    { value: 'Wins', label: s.wins2 },
+    { value: 'Losses', label: s.losses2 },
+    { value: 'Draws', label: s.draws2 },
+  ];
+
+  const activeCount = [
+    filters.format !== 'All',
+    filters.deck.length > 0,
+    filters.oppDeck.length > 0,
+    filters.period !== 'All',
+    filters.result !== 'All',
+  ].filter(Boolean).length;
+
+  const setF = <K extends keyof Filters>(k: K, v: Filters[K]) =>
+    setFilters(f => ({ ...f, [k]: v }));
+
+  // Display value dos botões de deck
+  const deckDisplay = filters.deck.length === 0
+    ? s.all
+    : filters.deck.length === 1
+      ? filters.deck[0]
+      : `${filters.deck.length} decks`;
+  const oppDeckDisplay = filters.oppDeck.length === 0
+    ? s.all
+    : filters.oppDeck.length === 1
+      ? filters.oppDeck[0]
+      : `${filters.oppDeck.length} decks`;
+
+  // Label do período para o share card
+  const periodLabelMap: Record<string, string> = {
+    '1d': s.today, '7d': '7d', '30d': '30d', '90d': '90d', 'All': s.all,
+  };
+  const periodLabel = periodLabelMap[filters.period] ?? filters.period;
+
+  return (
+    <>
+      <ScrollView
+        style={styles.page}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Title */}
+        <View style={styles.titleRow}>
+          <View>
+            <Text style={styles.pageTitle}>{s.title}</Text>
+            <Text style={styles.subtitle}>
+              {stats.total} · {stats.wins}{s.wins}–{stats.losses}{s.losses}{stats.draws > 0 ? `–${stats.draws}${s.drawn}` : ''}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setOpenModal('share')}
+            style={styles.shareBtn}
+            hitSlop={10}
+          >
+            <Icon name="share" size={18} stroke={colors.ink3} strokeWidth={1.8} />
+          </Pressable>
+        </View>
+
+        {/* Filters */}
+        <View style={styles.filtersCard}>
+          <View style={styles.filtersHeader}>
+            <Text style={styles.sectionLabel}>{s.filterFormat} · {s.filterDeck} · {s.filterOpp}</Text>
+            <Text style={styles.activeCount}>{activeCount}</Text>
+          </View>
+
+          <FilterRow label={s.filterFormat} value={filters.format} options={formats} onChange={v => setF('format', v)} />
+
+          {/* Deck — botão que abre modal */}
+          <FilterPickerButton
+            label={s.filterDeck}
+            value={filters.deck}
+            displayValue={deckDisplay}
+            onPress={() => setOpenModal('deck')}
+          />
+
+          {/* Oponente — botão que abre modal */}
+          <FilterPickerButton
+            label={s.filterOpp}
+            value={filters.oppDeck}
+            displayValue={oppDeckDisplay}
+            onPress={() => setOpenModal('oppDeck')}
+          />
+
+          <FilterRow label={s.filterPeriod} value={filters.period} options={periods} onChange={v => setF('period', v)} />
+          <FilterRow label={s.filterResult} value={filters.result} options={results} onChange={v => setF('result', v)} />
+        </View>
+
+        {stats.total === 0 ? (
+          <View style={[styles.chart, { padding: 24, alignItems: 'center' }]}>
+            <Text style={styles.emptyTitle}>{s.noData}</Text>
+          </View>
+        ) : (
+          <>
+            {/* Summary strip */}
+            <View style={styles.summary}>
+              <ChartDonut value={stats.wr} size={90} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.sectionLabel}>{s.winRate}</Text>
+                <Text style={styles.bigNum}>{stats.total}</Text>
+                <Text style={styles.sectionLabel}>
+                  {stats.wins}{s.wins} · {stats.losses}{s.losses}{stats.draws > 0 ? ` · ${stats.draws}${s.drawn}` : ''}
+                </Text>
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.sectionLabel}>{s.streak}</Text>
+                <Text style={[styles.bigNum, { color: stats.streakType ? colors.good : colors.bad }]}>
+                  {stats.streakType ? '+' : ''}{stats.streak}
+                </Text>
+                <Text style={styles.sectionLabel}>{stats.streakType ? s.wins2 : s.losses2}</Text>
+              </View>
+            </View>
+
+            {/* Win rate over time */}
+            <ChartCard title={s.evolution}>
+              <ChartLine points={stats.evolution} w={chartW} h={90} />
+            </ChartCard>
+
+            {/* On play / draw */}
+            <ChartCard title={s.onPlayTitle}>
+              <ChartSplit
+                left={stats.onPlayWR}
+                right={stats.onDrawWR}
+                leftLabel={s.onPlay}
+                rightLabel={s.onDraw}
+                w={chartW}
+              />
+            </ChartCard>
+
+            {/* Per deck */}
+            {stats.decks.length > 0 && (
+              <ChartCard title={s.myDecks}>
+                <DeckList rows={stats.decks} />
+              </ChartCard>
+            )}
+
+            {/* Opponents */}
+            {stats.opponents.length > 0 && (
+              <ChartCard title={s.opponents}>
+                <ChartBars data={stats.opponents} w={chartW} />
+              </ChartCard>
+            )}
+
+            {/* Archetypes */}
+            {stats.archetypes.length > 0 && (
+              <ChartCard title={s.archetypes}>
+                <ChartBars data={stats.archetypes.map(a => ({ ...a, suffix: '%' }))} w={chartW} colorize />
+              </ChartCard>
+            )}
+          </>
+        )}
+
+        <View style={{ height: 20 }} />
+      </ScrollView>
+
+      {/* Modal — Deck (multi-select) */}
+      <FilterPickerModal
+        visible={openModal === 'deck'}
+        title={s.filterDeck}
+        options={deckOptions}
+        value={filters.deck}
+        onChange={v => setF('deck', v as Filters['deck'])}
+        onClose={() => setOpenModal(null)}
+        searchPlaceholder={t.manageDecks.search}
+        allLabel={s.all}
+        applyLabel={s.filterDeck}
+      />
+
+      {/* Modal — Oponente (multi-select) */}
+      <FilterPickerModal
+        visible={openModal === 'oppDeck'}
+        title={s.filterOpp}
+        options={oppDeckOptions}
+        value={filters.oppDeck}
+        onChange={v => setF('oppDeck', v as Filters['oppDeck'])}
+        onClose={() => setOpenModal(null)}
+        searchPlaceholder={t.manageDecks.search}
+        allLabel={s.all}
+        applyLabel={s.filterOpp}
+      />
+
+      {/* Modal — Share */}
+      <StatsShareModal
+        visible={openModal === 'share'}
+        onClose={() => setOpenModal(null)}
+        stats={stats}
+        filters={filters}
+        periodLabel={periodLabel}
+        winLabel={s.wins2}
+        lossLabel={s.losses2}
+      />
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 20, gap: 14 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  shareBtn: {
+    marginTop: 6,
+    padding: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    color: colors.ink,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 9.5,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.ink3,
+    marginTop: 4,
+  },
+  sectionLabel: {
+    fontSize: 9.5,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.ink3,
+  },
+  filtersCard: {
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    gap: 6,
+  },
+  filtersHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  activeCount: {
+    fontSize: 9,
+    fontFamily: 'JetBrainsMono',
+    color: colors.ink3,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterLabel: {
+    width: 62,
+    fontSize: 9.5,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.ink3,
+  },
+  chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  chipActive: {
+    backgroundColor: colors.ink,
+    borderColor: colors.ink,
+  },
+  chipText: {
+    fontSize: 10.5,
+    fontFamily: 'Inter',
+    color: colors.ink,
+  },
+  chipTextActive: { color: '#fff' },
+  // ─── Picker button ───────────────────────────────────────────
+  pickerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    gap: 6,
+  },
+  pickerBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  pickerBtnText: {
+    flex: 1,
+    fontSize: 10.5,
+    fontFamily: 'Inter',
+    color: colors.ink,
+  },
+  pickerBtnTextActive: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  // ─── Charts ─────────────────────────────────────────────────
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 4,
+  },
+  bigNum: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    color: colors.ink,
+    lineHeight: 28,
+  },
+  chart: {
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    gap: 8,
+  },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  chartTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter',
+    color: colors.ink,
+  },
+  chartSub: {
+    fontSize: 10,
+    fontFamily: 'JetBrainsMono',
+    color: colors.ink3,
+  },
+  emptyTitle: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter', color: colors.ink },
+  emptySub: { fontSize: 12, fontFamily: 'Inter', color: colors.ink3, marginTop: 4 },
+});

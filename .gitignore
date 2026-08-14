@@ -1,0 +1,59 @@
+# Dependências
+node_modules/
+
+# Nativo gerado pelo Expo (CNG). Recrie com `npx expo prebuild`.
+android/
+ios/
+.expo/
+*.jsbundle
+
+# Fontes. Baixe com `npm run setup` — não versionamos binários de terceiros.
+assets/fonts/*.ttf
+assets/fonts/*.otf
+
+# Build / distribuição
+dist/
+web-build/
+*.apk
+*.aab
+*.ipa
+*.keystore
+!debug.keystore
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+google-services.json
+GoogleService-Info.plist
+
+# Modelo de IA (~350 MB) — baixado em runtime pelo app
+*.gguf
+*.task
+
+# Fine-tuning: pesos e checkpoints são grandes demais para git
+finetune/adapter*/
+finetune/outputs/
+finetune/*.safetensors
+finetune/*.bin
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+*Zone.Identifier
+*.log
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Testes
+coverage/
+
+# Nota de trabalho local, com caminhos absolutos da máquina do autor
+SESSAO.md
