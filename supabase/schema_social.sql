@@ -115,9 +115,31 @@ create table if not exists public.venues (
   constraint venues_city_len check (char_length(city) <= 60)
 );
 
-create index if not exists venues_name_trgm_idx
-  on public.venues using gin (name gin_trgm_ops);
-create index if not exists venues_city_idx on public.venues (lower(city));
+/**
+ * Chave de comparação de nome: minúsculas, sem acento, espaços colapsados.
+ *
+ * pg_trgm já ignora caixa, mas não acento — e "Loja do Zé" contra "Loja do Ze"
+ * fica na fronteira do corte de similaridade. Nome de loja em português é
+ * cheio de acento; sem normalizar, a base duplica exatamente onde não pode.
+ *
+ * `unaccent` faria isso, mas é extensão e o Supabase a instala em `extensions`,
+ * fora do search_path fixo das funções abaixo. `translate` resolve sem isso.
+ */
+create or replace function public.venue_key(p text)
+returns text
+language sql
+immutable
+as $$
+  select lower(translate(
+    trim(regexp_replace(coalesce(p, ''), '\s+', ' ', 'g')),
+    'áàâãäéèêëíìîïóòôõöúùûüçñÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑ',
+    'aaaaaeeeeiiiiooooouuuucnaaaaaeeeeiiiiooooouuuucn'
+  ));
+$$;
+
+create index if not exists venues_key_trgm_idx
+  on public.venues using gin (public.venue_key(name) gin_trgm_ops);
+create index if not exists venues_city_idx on public.venues (public.venue_key(city));
 
 alter table public.venues enable row level security;
 
@@ -345,12 +367,18 @@ security definer
 set search_path = public
 as $$
   select v.id, v.name, v.kind, v.city, v.country,
-         (similarity(v.name, p_query)
-          + case when p_city <> '' and lower(v.city) = lower(p_city) then 0.3 else 0 end
+         (similarity(public.venue_key(v.name), public.venue_key(p_query))
+          + case
+              when p_city <> '' and public.venue_key(v.city) = public.venue_key(p_city)
+              then 0.3 else 0
+            end
          )::real as score
   from public.venues v
   where p_query <> ''
-    and (v.name ilike '%' || p_query || '%' or similarity(v.name, p_query) > 0.2)
+    and (
+      public.venue_key(v.name) like '%' || public.venue_key(p_query) || '%'
+      or similarity(public.venue_key(v.name), public.venue_key(p_query)) > 0.2
+    )
   order by score desc, v.name
   limit least(greatest(p_limit, 1), 50);
 $$;
@@ -387,9 +415,9 @@ begin
 
   select * into existing
   from public.venues v
-  where lower(v.city) = lower(clean_city)
-    and similarity(v.name, clean_name) > 0.6
-  order by similarity(v.name, clean_name) desc
+  where public.venue_key(v.city) = public.venue_key(clean_city)
+    and similarity(public.venue_key(v.name), public.venue_key(clean_name)) > 0.6
+  order by similarity(public.venue_key(v.name), public.venue_key(clean_name)) desc
   limit 1;
 
   if existing.id is not null then
@@ -407,6 +435,9 @@ $$;
 -- ─── Permissões ─────────────────────────────────────────────
 -- `anon` (chave pública, sem login) segue só com ingest_matches.
 -- O resto exige conta.
+
+-- `venue_key` é pura e sem dado sensível; qualquer papel pode chamar.
+grant execute on function public.venue_key(text) to anon, authenticated;
 
 revoke all on function public.ensure_player(text)  from public;
 revoke all on function public.create_invite()       from public;
