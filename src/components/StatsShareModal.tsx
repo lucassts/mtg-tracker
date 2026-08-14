@@ -11,30 +11,46 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { colors } from '../theme/colors';
 import { Icon } from './Icon';
-import { StatsShareCard, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT } from './StatsShareCard';
-import { ComputedStats, Filters } from '../types';
+import {
+  StatsShareCard, ShareCardLabels, SHARE_CARD_WIDTH, SHARE_CARD_HEIGHT,
+} from './StatsShareCard';
+import { ComputedStats, Filters, SharePrefs } from '../types';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   stats: ComputedStats;
   filters: Filters;
+  prefs: SharePrefs;
   periodLabel: string;
   winLabel: string;
   lossLabel: string;
+  labels: ShareCardLabels;
 }
 
 export function StatsShareModal({
-  visible, onClose, stats, filters, periodLabel, winLabel, lossLabel,
+  visible, onClose, stats, filters, prefs, periodLabel, winLabel, lossLabel, labels,
 }: Props) {
   const cardRef = React.useRef<View>(null);
   const [loading, setLoading] = React.useState(false);
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  /**
+   * O card não tem mais altura fixa — ela depende de quantos blocos estão
+   * ligados em Configurações. Medimos o que foi renderizado em vez de supor.
+   */
+  const [cardHeight, setCardHeight] = React.useState(SHARE_CARD_HEIGHT);
 
   // Escala o card para caber no modal (padding 20px de cada lado + 2×16 de padding do sheet)
   const availableWidth = Math.min(screenWidth - 40, 400) - 32;
-  const cardScale = Math.min(1, availableWidth / SHARE_CARD_WIDTH);
-  const scaledHeight = SHARE_CARD_HEIGHT * cardScale;
+  // O preview também não pode passar de metade da tela, senão os botões saem.
+  const availableHeight = screenHeight * 0.5;
+  const cardScale = Math.min(
+    1,
+    availableWidth / SHARE_CARD_WIDTH,
+    availableHeight / cardHeight
+  );
+  const scaledHeight = cardHeight * cardScale;
 
   const handleShare = async () => {
     if (!cardRef.current) return;
@@ -84,23 +100,25 @@ export function StatsShareModal({
           <View style={[styles.cardWrap, { height: scaledHeight + 16 }]}>
             <View style={{
               width: SHARE_CARD_WIDTH,
-              height: SHARE_CARD_HEIGHT,
               transform: [{ scale: cardScale }],
               // Corrige o offset vertical do scale (RN escala a partir do centro)
-              marginTop: -(SHARE_CARD_HEIGHT * (1 - cardScale)) / 2,
-              marginBottom: -(SHARE_CARD_HEIGHT * (1 - cardScale)) / 2,
+              marginTop: -(cardHeight * (1 - cardScale)) / 2,
+              marginBottom: -(cardHeight * (1 - cardScale)) / 2,
             }}>
               <View
                 ref={cardRef}
                 collapsable={false}
-                style={{ width: SHARE_CARD_WIDTH, height: SHARE_CARD_HEIGHT }}
+                style={{ width: SHARE_CARD_WIDTH }}
+                onLayout={e => setCardHeight(e.nativeEvent.layout.height)}
               >
                 <StatsShareCard
                   stats={stats}
                   filters={filters}
+                  prefs={prefs}
                   periodLabel={periodLabel}
                   winLabel={winLabel}
                   lossLabel={lossLabel}
+                  labels={labels}
                 />
               </View>
             </View>

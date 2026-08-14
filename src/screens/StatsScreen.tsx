@@ -21,6 +21,7 @@ const defaultFilters: Filters = {
   oppDeck: [],
   period: 'All',
   result: 'All',
+  version: [],
 };
 
 // ─── Chip — para filtros simples (format, period, result) ──────────────────
@@ -108,13 +109,44 @@ export function StatsScreen() {
   // page padding 20×2 + card padding 12×2 = 64px
   const chartW = screenWidth - 64;
   const matches = useStore(st => st.matches);
+  const sharePrefs = useStore(st => st.settings.sharePrefs);
   const [filters, setFilters] = React.useState<Filters>(defaultFilters);
 
-  // Qual modal está aberto: null | 'deck' | 'oppDeck' | 'share'
-  const [openModal, setOpenModal] = React.useState<null | 'deck' | 'oppDeck' | 'share'>(null);
+  // Qual modal está aberto
+  const [openModal, setOpenModal] =
+    React.useState<null | 'deck' | 'oppDeck' | 'version' | 'share'>(null);
 
   const filtered = React.useMemo(() => applyFilters(matches, filters), [matches, filters]);
   const stats = React.useMemo(() => computeStats(filtered), [filtered]);
+
+  /**
+   * Versões disponíveis para os decks escolhidos.
+   *
+   * Sai do histórico, não do cadastro: uma versão apagada em Decks continua
+   * carimbada nas partidas dela, e sumir do filtro esconderia esse passado.
+   * A opção de rótulo vazio ("sem versão") só aparece quando existe partida
+   * antiga assim — senão seria uma linha morta.
+   */
+  const versionOptions = React.useMemo(() => {
+    if (filters.deck.length === 0) return [];
+    const decked = matches.filter(m => filters.deck.includes(m.myDeck));
+    const labels = new Set(decked.map(m => m.deckVersion || ''));
+    if (labels.size <= 1 && !labels.has('')) return [];
+    if (labels.size === 1 && labels.has('')) return [];
+    return [...labels]
+      .sort((a, b) => (a === '' ? 1 : b === '' ? -1 : b.localeCompare(a)))
+      .map(v => ({ value: v, label: v || s.noVersion }));
+  }, [matches, filters.deck, s.noVersion]);
+
+  // Trocar de deck invalida a seleção de versão que era daquele outro deck.
+  React.useEffect(() => {
+    setFilters(f => {
+      if (f.version.length === 0) return f;
+      const valid = new Set(versionOptions.map(o => o.value));
+      const kept = f.version.filter(v => valid.has(v));
+      return kept.length === f.version.length ? f : { ...f, version: kept };
+    });
+  }, [versionOptions]);
 
   // Options — chips (format, period, result)
   const allOpt = { value: 'All', label: s.all };
@@ -140,6 +172,7 @@ export function StatsScreen() {
     filters.format !== 'All',
     filters.deck.length > 0,
     filters.oppDeck.length > 0,
+    filters.version.length > 0,
     filters.period !== 'All',
     filters.result !== 'All',
   ].filter(Boolean).length;
@@ -152,12 +185,17 @@ export function StatsScreen() {
     ? s.all
     : filters.deck.length === 1
       ? filters.deck[0]
-      : `${filters.deck.length} decks`;
+      : s.deckCount(filters.deck.length);
   const oppDeckDisplay = filters.oppDeck.length === 0
     ? s.all
     : filters.oppDeck.length === 1
       ? filters.oppDeck[0]
-      : `${filters.oppDeck.length} decks`;
+      : s.deckCount(filters.oppDeck.length);
+  const versionDisplay = filters.version.length === 0
+    ? s.all
+    : filters.version.length === 1
+      ? (filters.version[0] || s.noVersion)
+      : s.versionCount(filters.version.length);
 
   // Label do período para o share card
   const periodLabelMap: Record<string, string> = {
@@ -205,6 +243,16 @@ export function StatsScreen() {
             displayValue={deckDisplay}
             onPress={() => setOpenModal('deck')}
           />
+
+          {/* Versão — só existe quando o deck escolhido é versionado */}
+          {versionOptions.length > 0 && (
+            <FilterPickerButton
+              label={s.filterVersion}
+              value={filters.version}
+              displayValue={versionDisplay}
+              onPress={() => setOpenModal('version')}
+            />
+          )}
 
           {/* Oponente — botão que abre modal */}
           <FilterPickerButton
@@ -273,6 +321,20 @@ export function StatsScreen() {
               </ChartCard>
             )}
 
+            {/* Contra quem — só aparece para quem registra oponente */}
+            {stats.oppPlayers.length > 0 && (
+              <ChartCard title={s.oppPlayers}>
+                <DeckList rows={stats.oppPlayers} />
+              </ChartCard>
+            )}
+
+            {/* Onde — idem, depende de o local ter sido registrado */}
+            {stats.venues.length > 0 && (
+              <ChartCard title={s.venues}>
+                <DeckList rows={stats.venues} />
+              </ChartCard>
+            )}
+
             {/* Archetypes */}
             {stats.archetypes.length > 0 && (
               <ChartCard title={s.archetypes}>
@@ -311,15 +373,38 @@ export function StatsScreen() {
         applyLabel={s.filterOpp}
       />
 
+      {/* Modal — Versão do deck (multi-select, tudo marcado = todas) */}
+      <FilterPickerModal
+        visible={openModal === 'version'}
+        title={s.filterVersion}
+        options={versionOptions}
+        value={filters.version}
+        onChange={v => setF('version', v as Filters['version'])}
+        onClose={() => setOpenModal(null)}
+        searchPlaceholder={s.searchVersion}
+        allLabel={s.all}
+        applyLabel={s.filterVersion}
+      />
+
       {/* Modal — Share */}
       <StatsShareModal
         visible={openModal === 'share'}
         onClose={() => setOpenModal(null)}
         stats={stats}
         filters={filters}
+        prefs={sharePrefs}
         periodLabel={periodLabel}
-        winLabel={s.wins2}
-        lossLabel={s.losses2}
+        winLabel={s.wins}
+        lossLabel={s.losses}
+        labels={{
+          onPlay: s.onPlay,
+          onDraw: s.onDraw,
+          decks: s.myDecks,
+          oppDecks: s.opponents,
+          oppPlayers: s.oppPlayers,
+          venues: s.venues,
+          noVersion: s.noVersion,
+        }}
       />
     </>
   );

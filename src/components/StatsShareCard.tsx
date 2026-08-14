@@ -7,17 +7,31 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { ComputedStats, Filters } from '../types';
+import { ComputedStats, Filters, RecordRow, SharePrefs } from '../types';
+
+/** Títulos dos blocos, já traduzidos — o card não conhece o i18n. */
+export interface ShareCardLabels {
+  onPlay: string;
+  onDraw: string;
+  decks: string;
+  oppDecks: string;
+  oppPlayers: string;
+  venues: string;
+  noVersion: string;
+}
 
 interface Props {
   stats: ComputedStats;
   filters: Filters;
+  /** Quais blocos entram. Vem de Configurações → Compartilhamento. */
+  prefs: SharePrefs;
   /** Rótulo traduzido do período atual (ex: "Últimos 30 dias") */
   periodLabel: string;
   /** Rótulo traduzido de vitória (ex: "V") */
   winLabel: string;
   /** Rótulo traduzido de derrota (ex: "D") */
   lossLabel: string;
+  labels: ShareCardLabels;
 }
 
 // ── Mini donut ring ──────────────────────────────────────────────────────────
@@ -84,23 +98,23 @@ const chipStyles = StyleSheet.create({
   },
 });
 
-// ── Play / Draw bar ──────────────────────────────────────────────────────────
-function PlayDrawBar({
-  onPlay, onDraw, playLabel, drawLabel,
-}: { onPlay: number; onDraw: number; playLabel: string; drawLabel: string }) {
-  const total = onPlay + onDraw;
-  const playRatio = total ? onPlay / total : 0.5;
+// ── Barra de win rate ────────────────────────────────────────────────────────
+
+/**
+ * Uma linha por situação — começar e sacar são dois win rates independentes,
+ * não duas metades de um todo. A barra compartilhada dizia o contrário: com
+ * 60% e 40% ela ficava meio a meio, sugerindo uma proporção que não existe.
+ * Agora cada uma preenche a própria trilha na medida do próprio percentual.
+ */
+function WrBar({ label, value }: { label: string; value: number }) {
   return (
     <View style={barStyles.wrap}>
-      <Text style={barStyles.pct}>{onPlay}%</Text>
-      <Text style={barStyles.side}>{playLabel}</Text>
-      {/* Bar */}
+      <Text style={barStyles.side}>{label}</Text>
       <View style={barStyles.track}>
-        <View style={[barStyles.fill, { flex: playRatio }]} />
-        <View style={{ flex: 1 - playRatio }} />
+        <View style={[barStyles.fill, { flex: Math.max(value, 0) / 100 }]} />
+        <View style={{ flex: 1 - Math.max(value, 0) / 100 }} />
       </View>
-      <Text style={barStyles.side}>{drawLabel}</Text>
-      <Text style={barStyles.pct}>{onDraw}%</Text>
+      <Text style={barStyles.pct}>{value}%</Text>
     </View>
   );
 }
@@ -109,7 +123,7 @@ const barStyles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     width: '100%',
   },
   side: {
@@ -117,9 +131,8 @@ const barStyles = StyleSheet.create({
     fontFamily: 'JetBrainsMono',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.4)',
-    width: 36,
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.45)',
+    width: 52,
   },
   pct: {
     fontSize: 11,
@@ -127,7 +140,7 @@ const barStyles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.7)',
     width: 32,
-    textAlign: 'center',
+    textAlign: 'right',
   },
   track: {
     flex: 1,
@@ -146,17 +159,51 @@ const barStyles = StyleSheet.create({
 // ── Main card ────────────────────────────────────────────────────────────────
 
 export const SHARE_CARD_WIDTH = 360;
+/** Altura só do card mínimo. Blocos ligados fazem o card crescer a partir daí. */
 export const SHARE_CARD_HEIGHT = 460;
 
-export function StatsShareCard({ stats, filters, periodLabel, winLabel, lossLabel }: Props) {
+/** Quantas linhas cada lista leva. Além disso vira relatório, não card. */
+const ROWS = 3;
+
+function RecordSection({ label, rows, winShort, lossShort }: {
+  label: string;
+  rows: RecordRow[];
+  winShort: string;
+  lossShort: string;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      {/* Maiúscula em JS, não por textTransform: o Android mede o texto antes
+          de aplicar a transformação e corta a última letra. */}
+      <Text style={styles.sectionLabel}>{label.toUpperCase()}</Text>
+      <View style={styles.deckRows}>
+        {rows.slice(0, ROWS).map(d => (
+          <View key={d.l} style={styles.deckRow}>
+            <Text style={styles.deckName} numberOfLines={1}>{d.l}</Text>
+            <Text style={[styles.deckWr, { color: d.wr >= 50 ? '#2d8a5e' : '#c0422a' }]}>
+              {d.wr}%
+            </Text>
+            <Text style={styles.deckRecord}>{d.wins}{winShort}·{d.losses}{lossShort}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function StatsShareCard({
+  stats, filters, prefs, periodLabel, winLabel, lossLabel, labels,
+}: Props) {
   const streakSign = stats.streakType ? '+' : '';
-  const streakColor = stats.streakType ? '#2d8a5e' : '#c0422a';
 
   // Contexto de filtro para mostrar no card
   const contextParts: string[] = [];
   if (filters.format && filters.format !== 'All') contextParts.push(filters.format);
   if (filters.deck.length === 1) contextParts.push(filters.deck[0]);
   else if (filters.deck.length > 1) contextParts.push(`${filters.deck.length} decks`);
+  if (filters.version.length === 1) contextParts.push(filters.version[0] || labels.noVersion);
+  else if (filters.version.length > 1) contextParts.push(`${filters.version.length} v.`);
   if (filters.oppDeck.length === 1) contextParts.push(`vs ${filters.oppDeck[0]}`);
   else if (filters.oppDeck.length > 1) contextParts.push(`vs ${filters.oppDeck.length} decks`);
   contextParts.push(periodLabel);
@@ -170,9 +217,11 @@ export function StatsShareCard({ stats, filters, periodLabel, winLabel, lossLabe
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.appName}>MTG TRACKER</Text>
-          <Text style={styles.context} numberOfLines={2}>{contextLine}</Text>
+          {prefs.context && (
+            <Text style={styles.context} numberOfLines={2}>{contextLine}</Text>
+          )}
         </View>
         {/* Accent dot */}
         <View style={styles.accentDot} />
@@ -191,43 +240,68 @@ export function StatsShareCard({ stats, filters, periodLabel, winLabel, lossLabe
       </View>
 
       {/* ── Stats chips ── */}
-      <View style={styles.chips}>
-        <StatChip value={stats.wins} label={winLabel} />
-        <StatChip value={stats.losses} label={lossLabel} />
-        <StatChip value={stats.total} label="TOTAL" />
-        <StatChip
-          value={`${streakSign}${stats.streak}`}
-          label="STREAK"
-          accent={stats.streak > 0}
-        />
-      </View>
+      {(prefs.record || prefs.streak) && (
+        <View style={styles.chips}>
+          {prefs.record && <StatChip value={stats.wins} label={winLabel} />}
+          {prefs.record && <StatChip value={stats.losses} label={lossLabel} />}
+          {prefs.record && <StatChip value={stats.total} label="TOTAL" />}
+          {prefs.streak && (
+            <StatChip
+              value={`${streakSign}${stats.streak}`}
+              label="STREAK"
+              accent={stats.streak > 0}
+            />
+          )}
+        </View>
+      )}
 
-      {/* ── Play / Draw ── */}
-      <View style={styles.section}>
-        <PlayDrawBar
-          onPlay={stats.onPlayWR}
-          onDraw={stats.onDrawWR}
-          playLabel="COMEÇA"
-          drawLabel="SACA"
-        />
-      </View>
-
-      {/* ── Top decks (se houver) ── */}
-      {stats.decks.length > 0 && (
+      {/* ── Começa / Saca — uma linha para cada ── */}
+      {prefs.playDraw && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>TOP DECKS</Text>
+          <WrBar label={labels.onPlay.toUpperCase()} value={stats.onPlayWR} />
+          <WrBar label={labels.onDraw.toUpperCase()} value={stats.onDrawWR} />
+        </View>
+      )}
+
+      {prefs.decks && (
+        <RecordSection
+          label={labels.decks}
+          rows={stats.decks}
+          winShort={winLabel}
+          lossShort={lossLabel}
+        />
+      )}
+
+      {prefs.oppDecks && stats.opponents.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{labels.oppDecks.toUpperCase()}</Text>
           <View style={styles.deckRows}>
-            {stats.decks.slice(0, 3).map(d => (
-              <View key={d.l} style={styles.deckRow}>
-                <Text style={styles.deckName} numberOfLines={1}>{d.l}</Text>
-                <Text style={[styles.deckWr, { color: d.wr >= 50 ? '#2d8a5e' : '#c0422a' }]}>
-                  {d.wr}%
-                </Text>
-                <Text style={styles.deckRecord}>{d.wins}V·{d.losses}D</Text>
+            {stats.opponents.slice(0, ROWS).map(o => (
+              <View key={o.l} style={styles.deckRow}>
+                <Text style={styles.deckName} numberOfLines={1}>{o.l}</Text>
+                <Text style={styles.deckRecord}>{o.v}</Text>
               </View>
             ))}
           </View>
         </View>
+      )}
+
+      {prefs.oppPlayers && (
+        <RecordSection
+          label={labels.oppPlayers}
+          rows={stats.oppPlayers}
+          winShort={winLabel}
+          lossShort={lossLabel}
+        />
+      )}
+
+      {prefs.venues && (
+        <RecordSection
+          label={labels.venues}
+          rows={stats.venues}
+          winShort={winLabel}
+          lossShort={lossLabel}
+        />
       )}
 
       {/* ── Divider ── */}
@@ -245,10 +319,15 @@ export function StatsShareCard({ stats, filters, periodLabel, winLabel, lossLabe
 const styles = StyleSheet.create({
   card: {
     width: SHARE_CARD_WIDTH,
-    height: SHARE_CARD_HEIGHT,
+    // Sem altura fixa: o card cresce com os blocos ligados em Configurações.
+    // Quem mede é o modal, por onLayout, para escalar o preview.
+    minHeight: SHARE_CARD_HEIGHT,
     backgroundColor: '#16150f',
     borderRadius: 0, // capturado sem bordas para visual limpo
     padding: 24,
+    gap: 16,
+    // Com poucos blocos o conteúdo se espalha até a altura mínima; com muitos,
+    // ele empilha e o card cresce. Os dois casos ficam certos.
     justifyContent: 'space-between',
     overflow: 'hidden',
   },

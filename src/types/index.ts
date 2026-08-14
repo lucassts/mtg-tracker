@@ -95,6 +95,30 @@ export interface DeckVersion {
   label: string;
   notes: string;
   createdAt: string;
+  /**
+   * Lista de cartas como o jogador colou, no formato do MTGO: uma carta por
+   * linha, `<qtd> <nome>`, e o sideboard depois de uma linha em branco.
+   *
+   * Guardado como texto bruto, não como estrutura. A contagem se recalcula em
+   * qualquer momento, mas o texto original é o que o jogador reconhece — e é o
+   * que ele vai querer copiar de volta para o MTGO ou para o Arena.
+   */
+  list?: string;
+}
+
+/** Uma linha de lista de deck já interpretada. */
+export interface DeckCard {
+  qty: number;
+  name: string;
+}
+
+export interface ParsedDecklist {
+  main: DeckCard[];
+  side: DeckCard[];
+  mainCount: number;
+  sideCount: number;
+  /** Linhas que não casaram com `<qtd> <nome>`. Não impedem salvar. */
+  ignored: string[];
 }
 
 export type Language = 'en-US' | 'pt-BR' | 'ja-JP';
@@ -111,6 +135,8 @@ export interface Settings {
   installId: string;
   /** O que a aba de contadores mostra. */
   counterPrefs: CounterPrefs;
+  /** O que o card de compartilhamento das estatísticas mostra. */
+  sharePrefs: SharePrefs;
   /** Parte social: conta anônima, oponentes vinculados, locais compartilhados. */
   social: SocialSettings;
 }
@@ -138,6 +164,12 @@ export interface Filters {
   oppDeck: string[];  // [] = todos; pode ter vários decks do oponente
   period: string;     // '1d'|'7d'|'30d'|'90d'|'All'
   result: string;     // 'All'|'Wins'|'Losses'|'Draws'
+  /**
+   * Rótulos de versão do deck. `[]` = todas, que é o estado inicial.
+   * String vazia é a opção "sem versão": partidas salvas antes de o deck
+   * passar a ser versionado.
+   */
+  version: string[];
 }
 
 export type Format =
@@ -163,6 +195,14 @@ export interface MatchConfidence {
   onPlay?: ConfidenceLevel;
 }
 
+/** Linha de aproveitamento: usada para deck, pessoa e local. */
+export interface RecordRow {
+  l: string;
+  wins: number;
+  losses: number;
+  wr: number;
+}
+
 export interface ComputedStats {
   total: number;
   wins: number;
@@ -174,8 +214,13 @@ export interface ComputedStats {
   onPlayWR: number;
   onDrawWR: number;
   evolution: number[];
-  decks: { l: string; wins: number; losses: number; wr: number }[];
+  decks: RecordRow[];
+  /** Decks que você enfrentou, por volume. */
   opponents: { l: string; v: number }[];
+  /** Aproveitamento contra cada pessoa. Só entra quem tem nome na partida. */
+  oppPlayers: RecordRow[];
+  /** Aproveitamento por local. Só entra partida com local registrado. */
+  venues: RecordRow[];
   archetypes: { l: string; v: number; n: number }[];
 }
 
@@ -238,6 +283,37 @@ export interface CounterPrefs {
   commanderDamage: boolean;
   custom: CustomCounter[];
 }
+
+// ─── O que entra no card de compartilhamento ────────────────
+
+/**
+ * Blocos opcionais do card gerado na aba Estatísticas. O anel de win rate e o
+ * rodapé não estão aqui de propósito: sem eles não sobra card, sobra imagem.
+ *
+ * `venues` e `oppPlayers` nascem desligados porque expõem terceiros — o nome
+ * da loja e o apelido do oponente. Ligar é decisão de quem publica.
+ */
+export interface SharePrefs {
+  context: boolean;
+  record: boolean;
+  streak: boolean;
+  playDraw: boolean;
+  decks: boolean;
+  oppDecks: boolean;
+  oppPlayers: boolean;
+  venues: boolean;
+}
+
+export const DEFAULT_SHARE_PREFS: SharePrefs = {
+  context: true,
+  record: true,
+  streak: true,
+  playDraw: true,
+  decks: true,
+  oppDecks: false,
+  oppPlayers: false,
+  venues: false,
+};
 
 export const DEFAULT_COUNTER_PREFS: CounterPrefs = {
   poison: true,

@@ -8,7 +8,53 @@ import { Icon } from '../components/Icon';
 import { useStore } from '../store/useStore';
 import { useDeckVersions } from '../store/selectors';
 import { Archetype, Deck, Format } from '../types';
+import { parseDecklist } from '../utils/decklist';
 import { useT } from '../i18n/useT';
+
+// ─── Lista de cartas ────────────────────────────────────────
+
+/**
+ * Campo de lista no formato do MTGO, com a contagem ao vivo.
+ *
+ * A contagem é o retorno imediato que diz se a colagem deu certo: quem cola um
+ * Modern espera ver 60 e 15, e qualquer outro número denuncia linha perdida no
+ * meio do caminho antes de a lista ser salva errada.
+ */
+function DecklistField({ value, onChange }: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const d = useT().decks;
+  const parsed = React.useMemo(() => parseDecklist(value), [value]);
+
+  return (
+    <>
+      <Text style={[styles.fieldLabel, { marginTop: 14 }]}>{d.list}</Text>
+      <TextInput
+        multiline
+        value={value}
+        onChangeText={onChange}
+        placeholder={d.listPlaceholder}
+        placeholderTextColor={colors.ink4}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={[styles.input, styles.listArea]}
+      />
+      {value.trim().length > 0 ? (
+        <View style={styles.listMetaRow}>
+          <Text style={styles.listCount}>
+            {d.listCount(parsed.mainCount, parsed.sideCount)}
+          </Text>
+          {parsed.ignored.length > 0 && (
+            <Text style={styles.listWarn}>{d.listIgnored(parsed.ignored.length)}</Text>
+          )}
+        </View>
+      ) : (
+        <Text style={styles.fieldHint}>{d.listHint}</Text>
+      )}
+    </>
+  );
+}
 
 const ALL_FORMATS: Format[] = [
   'Commander', 'Modern', 'Standard', 'Pioneer', 'Legacy', 'Pauper', 'Draft', 'Other',
@@ -58,8 +104,12 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
   const [creating, setCreating] = React.useState(false);
   const [label, setLabel] = React.useState('');
   const [notes, setNotes] = React.useState('');
+  const [list, setList] = React.useState('');
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editNotes, setEditNotes] = React.useState('');
+  const [editList, setEditList] = React.useState('');
+  /** Qual versão está com a lista aberta. Fechada por padrão: é texto longo. */
+  const [openList, setOpenList] = React.useState<string | null>(null);
 
   /** Desempenho por versão — o motivo de versionar deck. */
   const perVersion = React.useMemo(() => {
@@ -79,9 +129,10 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
 
   const submitVersion = () => {
     if (!label.trim()) return;
-    addDeckVersion(deck.id, label, notes);
+    addDeckVersion(deck.id, label, notes, list);
     setLabel('');
     setNotes('');
+    setList('');
     setCreating(false);
   };
 
@@ -169,10 +220,13 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
               placeholderTextColor={colors.ink4}
               style={[styles.input, styles.textarea]}
             />
+            <DecklistField value={list} onChange={setList} />
             <View style={styles.formActions}>
               <Pressable
                 style={styles.btnGhost}
-                onPress={() => { setCreating(false); setLabel(''); setNotes(''); }}
+                onPress={() => {
+                  setCreating(false); setLabel(''); setNotes(''); setList('');
+                }}
               >
                 <Text style={styles.btnGhostText}>{d.cancel}</Text>
               </Pressable>
@@ -238,6 +292,7 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
                     onChangeText={setEditNotes}
                     style={[styles.input, styles.textarea, { marginTop: 10 }]}
                   />
+                  <DecklistField value={editList} onChange={setEditList} />
                   <View style={styles.formActions}>
                     <Pressable style={styles.btnGhost} onPress={() => setEditingId(null)}>
                       <Text style={styles.btnGhostText}>{d.cancel}</Text>
@@ -245,7 +300,10 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
                     <Pressable
                       style={styles.btnPrimary}
                       onPress={() => {
-                        updateDeckVersion(v.id, { notes: editNotes });
+                        updateDeckVersion(v.id, {
+                          notes: editNotes,
+                          list: editList.trim() || undefined,
+                        });
                         setEditingId(null);
                       }}
                     >
@@ -256,15 +314,57 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
               ) : (
                 <>
                   {!!v.notes && <Text style={styles.versionNotes}>{v.notes}</Text>}
+
+                  {/* Lista de cartas — só a contagem, até pedirem para ver */}
+                  {!!v.list && (
+                    <Pressable
+                      onPress={() => setOpenList(openList === v.id ? null : v.id)}
+                      style={styles.listSummary}
+                    >
+                      <Icon name="list" size={14} stroke={colors.ink3} />
+                      <Text style={styles.listSummaryText}>
+                        {(() => {
+                          const p = parseDecklist(v.list!);
+                          return d.listCount(p.mainCount, p.sideCount);
+                        })()}
+                      </Text>
+                      <Icon
+                        name="chev"
+                        size={12}
+                        stroke={colors.ink4}
+                        strokeWidth={2}
+                      />
+                    </Pressable>
+                  )}
+                  {openList === v.id && !!v.list && (
+                    <Text style={styles.listBody} selectable>{v.list}</Text>
+                  )}
+
                   <View style={styles.versionActions}>
                     <Pressable
-                      onPress={() => { setEditingId(v.id); setEditNotes(v.notes); }}
+                      onPress={() => {
+                        setEditingId(v.id);
+                        setEditNotes(v.notes);
+                        setEditList(v.list || '');
+                      }}
                       hitSlop={8}
                     >
                       <Text style={styles.linkText}>
                         {v.notes ? d.editNotes : d.addNotes}
                       </Text>
                     </Pressable>
+                    {!v.list && (
+                      <Pressable
+                        onPress={() => {
+                          setEditingId(v.id);
+                          setEditNotes(v.notes);
+                          setEditList('');
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.linkText}>{d.addList}</Text>
+                      </Pressable>
+                    )}
                     <Pressable onPress={() => deleteDeckVersion(v.id)} hitSlop={8}>
                       <Text style={[styles.linkText, { color: colors.bad }]}>{d.delete}</Text>
                     </Pressable>
@@ -527,6 +627,50 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   textarea: { height: 78, textAlignVertical: 'top' },
+  listArea: {
+    height: 160,
+    textAlignVertical: 'top',
+    fontFamily: 'JetBrainsMono',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  listMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  listCount: {
+    fontSize: 11,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.4,
+    color: colors.ink3,
+  },
+  listWarn: { fontSize: 11, fontFamily: 'Inter', color: colors.bad },
+  listSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bg,
+  },
+  listSummaryText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.4,
+    color: colors.ink2,
+  },
+  listBody: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: colors.bg2,
+    fontFamily: 'JetBrainsMono',
+    fontSize: 11.5,
+    lineHeight: 18,
+    color: colors.ink2,
+  },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {

@@ -19,6 +19,7 @@ import { useT } from '../i18n/useT';
 import { TELEMETRY_CONFIGURED } from '../config';
 import { DecksScreen } from './DecksScreen';
 import { CountersSettingsScreen } from './CountersSettingsScreen';
+import { ShareSettingsScreen } from './ShareSettingsScreen';
 import { OpponentsScreen } from './OpponentsScreen';
 import { ClaimsScreen } from './ClaimsScreen';
 
@@ -71,6 +72,7 @@ export function SettingsScreen() {
 
   const [showDecks, setShowDecks] = React.useState(false);
   const [showCounters, setShowCounters] = React.useState(false);
+  const [showShare, setShowShare] = React.useState(false);
   const [showOpponents, setShowOpponents] = React.useState(false);
   const [showClaims, setShowClaims] = React.useState(false);
   const socialOn = useStore(st => st.settings.social.enabled);
@@ -129,6 +131,7 @@ export function SettingsScreen() {
 
   if (showDecks) return <DecksScreen onBack={() => setShowDecks(false)} />;
   if (showCounters) return <CountersSettingsScreen onBack={() => setShowCounters(false)} />;
+  if (showShare) return <ShareSettingsScreen onBack={() => setShowShare(false)} />;
   if (showOpponents) return <OpponentsScreen onBack={() => setShowOpponents(false)} />;
   if (showClaims) return <ClaimsScreen onBack={() => setShowClaims(false)} />;
 
@@ -274,6 +277,15 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>{s.counters}</Text>
               <Text style={styles.rowSub}>{s.countersSub}</Text>
+            </View>
+            <Icon name="chev" size={14} stroke={colors.ink4} />
+          </Row>
+          <View style={styles.rowDivider} />
+          <Row onPress={() => setShowShare(true)}>
+            <Icon name="share" size={18} stroke={colors.ink3} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>{s.shareCard}</Text>
+              <Text style={styles.rowSub}>{s.shareCardSub}</Text>
             </View>
             <Icon name="chev" size={14} stroke={colors.ink4} />
           </Row>

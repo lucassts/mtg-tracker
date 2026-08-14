@@ -22,6 +22,9 @@ const MANA_STYLE: Record<ManaColor, { bg: string; fg: string }> = {
   C: { bg: '#a8a294', fg: '#2a2820' },
 };
 
+/** Fração da tela ocupada pela folha. Vira pixel para a animação de entrada. */
+const SHEET_RATIO = 0.86;
+
 /** Limites que decidem a partida — passar deles pinta o número de vermelho. */
 const POISON_LETHAL = 10;
 const CMD_LETHAL = 21;
@@ -113,7 +116,7 @@ function ManaPip({
 // ─── Página de um jogador ───────────────────────────────────
 
 function PlayerPage({
-  width, index, players, counters, prefs, onPatch, onBump,
+  width, index, players, counters, prefs, onPatch, onBump, onScrollTop,
 }: {
   width: number;
   index: number;
@@ -124,6 +127,8 @@ function PlayerPage({
   onPatch: (partial: Partial<PlayerCounters>) => void;
   /** Incremento por variação, imune a toque rápido. */
   onBump: (field: BumpField, delta: number, key?: string) => void;
+  /** Avisa a folha se esta página está no topo — só aí o arrastar pode fechar. */
+  onScrollTop: (atTop: boolean) => void;
 }) {
   const t = useT();
   const c = t.counters;
@@ -132,11 +137,36 @@ function PlayerPage({
   const hasPlayerCounters =
     prefs.poison || prefs.energy || prefs.experience || visibleCustom.length > 0;
 
+  /**
+   * Só habilita a rolagem quando ela é necessária.
+   *
+   * Uma ScrollView do Android intercepta o arrasto vertical no nível nativo e
+   * derruba qualquer responder de JS acima dela — inclusive o que fecha esta
+   * folha. Com poucos contadores a página inteira cabe na tela, e nesse caso
+   * (o normal) desligar a rolagem devolve o arrasto para a folha, que passa a
+   * fechar de qualquer ponto. Quando a lista realmente é longa, rolar ganha —
+   * como tem que ser — e o arrasto continua valendo do topo da folha.
+   */
+  const [viewH, setViewH] = React.useState(0);
+  const [contentH, setContentH] = React.useState(0);
+  const scrolls = contentH > viewH + 1;
+
+  // O pai passa uma função nova a cada render; guardar em ref evita que o
+  // efeito dispare a cada um deles.
+  const report = React.useRef(onScrollTop);
+  report.current = onScrollTop;
+  React.useEffect(() => { if (!scrolls) report.current(true); }, [scrolls]);
+
   return (
     <ScrollView
       style={{ width }}
       contentContainerStyle={styles.pageContent}
       showsVerticalScrollIndicator={false}
+      scrollEnabled={scrolls}
+      onLayout={e => setViewH(e.nativeEvent.layout.height)}
+      onContentSizeChange={(_w, h) => setContentH(h)}
+      scrollEventThrottle={16}
+      onScroll={e => onScrollTop(e.nativeEvent.contentOffset.y <= 2)}
     >
       {/* Mana pool */}
       <View style={styles.block}>
@@ -253,7 +283,8 @@ export function CountersModal({
   const [page, setPage] = React.useState(0);
   // O sheet ocupa a largura inteira, então a janela já dá a largura da página.
   // Medir com onLayout era uma dependência a mais para o mesmo número.
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const sheetH = height * SHEET_RATIO;
   const pagerRef = React.useRef<ScrollView>(null);
 
   // Se o número de jogadores cair, a página aberta pode deixar de existir.
@@ -280,43 +311,62 @@ export function CountersModal({
   };
 
   /**
-   * Arrastar para baixo fecha a folha.
+   * Entrada, saída e arrastar são a MESMA animação: `dragY`.
    *
-   * O gesto vive só no cabeçalho de propósito: a página do jogador rola na
-   * vertical, e um PanResponder na folha inteira roubaria essa rolagem.
-   * A alça no topo é justamente a área que a pessoa já usa para isso.
+   * Antes o Modal deslizava sozinho (`animationType="slide"`) e ainda
+   * animávamos `dragY` por cima — fechar rodava duas vezes. Com o Modal em
+   * `none`, quem posiciona a folha é só este valor.
    */
-  const dragY = React.useRef(new Animated.Value(0)).current;
+  const dragY = React.useRef(new Animated.Value(sheetH)).current;
+  /** A folha só pode ser arrastada quando a página do jogador está no topo. */
+  const atTop = React.useRef(true);
 
   React.useEffect(() => {
-    if (visible) dragY.setValue(0);
-  }, [visible, dragY]);
+    if (!visible) return;
+    dragY.setValue(sheetH);
+    atTop.current = true;
+    Animated.timing(dragY, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [visible, dragY, sheetH]);
 
   const dismiss = React.useCallback(() => {
     Animated.timing(dragY, {
-      toValue: 600,
+      toValue: sheetH,
       duration: 180,
       useNativeDriver: true,
-    }).start(() => {
-      dragY.setValue(0);
-      onClose();
-    });
-  }, [dragY, onClose]);
+    }).start(({ finished }) => { if (finished) onClose(); });
+  }, [dragY, sheetH, onClose]);
 
+  /**
+   * Área de arrastar: tudo acima do pager — cabeçalho, barra de storm, as
+   * ações e as abas. São uns 40% da tela, contra só o cabeçalho de antes.
+   *
+   * Não vai até o fim da folha por um motivo concreto, não por preguiça: dali
+   * para baixo quem manda é o pager horizontal que troca de jogador, e ele é
+   * uma ScrollView nativa. Medi as três formas de conviver com ela — conceder
+   * o responder no toque, no movimento em bolha e na captura — e nenhuma
+   * preserva as duas coisas: ou a folha fecha de qualquer ponto e o deslize
+   * lateral morre, ou o deslize funciona e o arrastar não pega. Entre perder
+   * a troca de jogador e ter uma faixa de arrastar generosa, fica a faixa.
+   *
+   * A concessão é no toque porque é a única que o sistema de responder do RN
+   * honra aqui. Isso não rouba clique: a negociação sobe do alvo para a raiz,
+   * então o ✕, o raio e as abas são perguntados antes e ganham.
+   */
   const dragHandlers = React.useMemo(
     () => PanResponder.create({
-      // Captura já no toque, e não só depois de detectar movimento: a
-      // negociação por movimento se perdia e a folha não fechava. O ✕ é um
-      // Pressable dentro do cabeçalho e ganha a disputa por ser mais profundo,
-      // então continua clicável.
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+      onShouldBlockNativeResponder: () => false,
       onPanResponderMove: (_e, g) => {
-        // Só para baixo: puxar para cima não deve descolar a folha do fundo.
-        if (g.dy > 0) dragY.setValue(g.dy);
+        // Só para baixo, e só quando o movimento é claramente vertical.
+        if (g.dy > 0 && g.dy > Math.abs(g.dx)) dragY.setValue(g.dy);
       },
       onPanResponderRelease: (_e, g) => {
-        if (g.dy > 110 || g.vy > 0.8) {
+        if (g.dy > 110 || (g.dy > 40 && g.vy > 0.8)) {
           dismiss();
         } else {
           Animated.spring(dragY, {
@@ -326,9 +376,23 @@ export function CountersModal({
           }).start();
         }
       },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragY, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 4,
+        }).start();
+      },
     }),
     [dragY, dismiss]
   );
+
+  // O fundo escurece junto com a folha, em vez de piscar inteiro.
+  const backdropOpacity = dragY.interpolate({
+    inputRange: [0, sheetH],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   const patch = (idx: number, partial: Partial<PlayerCounters>) => {
     onCountersChange(prev => {
@@ -372,16 +436,22 @@ export function CountersModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={dismiss}>
       <View style={styles.backdrop}>
+        <Animated.View style={[styles.backdropFill, { opacity: backdropOpacity }]} />
         <Animated.View
           style={[
             styles.sheet,
-            { paddingBottom: insets.bottom + 8, transform: [{ translateY: dragY }] },
+            {
+              height: sheetH,
+              paddingBottom: insets.bottom + 8,
+              transform: [{ translateY: dragY }],
+            },
           ]}
         >
-          {/* Cabeçalho — também é a alça de arrastar */}
-          <View style={styles.header} {...dragHandlers.panHandlers}>
+        <View {...dragHandlers.panHandlers}>
+          {/* Cabeçalho */}
+          <View style={styles.header}>
             <View style={styles.grabber} />
             <View style={styles.headerRow}>
               <Text style={styles.title}>{c.title}</Text>
@@ -457,6 +527,7 @@ export function CountersModal({
               </Pressable>
             ))}
           </ScrollView>
+        </View>
 
           {/* Páginas — uma por jogador, navegáveis por deslize */}
           <ScrollView
@@ -466,6 +537,10 @@ export function CountersModal({
             showsHorizontalScrollIndicator={false}
             onScroll={onPagerScroll}
             scrollEventThrottle={32}
+            // A folha lembra em qual jogador estava, mas a ScrollView volta
+            // para o começo ao ser remontada — a aba dizia J2 e a página
+            // mostrava J1. Reposiciona assim que o layout existe.
+            onLayout={() => { if (page > 0) scrollPagerTo(pagerRef, page * width); }}
             style={styles.pager}
             // Sem isto, o scroll vertical de dentro rouba o gesto horizontal.
             directionalLockEnabled
@@ -480,6 +555,7 @@ export function CountersModal({
                 prefs={prefs}
                 onPatch={partial => patch(i, partial)}
                 onBump={(field, delta, key) => bump(i, field, delta, key)}
+                onScrollTop={v => { if (i === page) atTop.current = v; }}
               />
             ))}
           </ScrollView>
@@ -494,11 +570,15 @@ export function CountersModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
+  // Separado do container porque a opacidade acompanha o arrastar, e animar o
+  // container moveria a folha junto.
+  backdropFill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
   sheet: {
-    height: '86%',
     backgroundColor: '#16150f',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,

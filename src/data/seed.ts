@@ -5,6 +5,11 @@ const DECKS_OPP = [
   'Edgar Markov', 'Urza', 'Atraxa', 'Krenko', 'Yuriko',
   'Winota', 'Narset', 'Kaalia', 'Tymna/Thrasios',
 ];
+// Nome de pessoa e de local entram no exemplo porque sem eles as duas listas
+// de aproveitamento — por oponente e por local — nascem vazias, e quem carrega
+// os dados de exemplo nunca descobre que elas existem.
+const OPPONENTS = ['Bruno', 'Marina', 'Téo', 'Rafa'];
+const VENUES = ['Liga Mágica', 'Cardhouse', 'Casa do Bruno'];
 const FORMATS = ['Commander', 'Modern', 'Standard', 'Pioneer'] as const;
 const ARCHETYPES = ['Aggro', 'Midrange', 'Control', 'Combo', 'Stax'] as const;
 
@@ -50,6 +55,11 @@ export function seedMatches(): Match[] {
       onPlay,
       won,
       notes: i % 6 === 0 ? 'Mulligan to 6, topdecked perfectly.' : '',
+      // Nem toda partida tem esses campos na vida real, e o exemplo reflete
+      // isso: as listas precisam funcionar com histórico incompleto.
+      opponentName: i % 3 === 0 ? undefined : OPPONENTS[Math.floor(rng() * OPPONENTS.length)],
+      venueName: i % 4 === 0 ? undefined : VENUES[Math.floor(rng() * VENUES.length)],
+      deckVersion: myDeck === 'Atraxa' ? (i % 2 === 0 ? 'v1' : 'v2 pós-ban') : undefined,
     });
   }
 

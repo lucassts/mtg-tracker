@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Match, Settings, PendingReview, TelemetryEvent, Deck, DeckVersion, Format, Archetype,
   CounterPrefs, CustomCounter, DEFAULT_COUNTER_PREFS,
+  SharePrefs, DEFAULT_SHARE_PREFS,
   Opponent, Venue, SocialSettings, DEFAULT_SOCIAL,
 } from '../types';
 import { seedMatches } from '../data/seed';
@@ -40,8 +41,8 @@ interface AppState {
   addDeck: (input: { name: string; format: Format; archetype?: Archetype }) => Deck | null;
   updateDeck: (id: string, patch: Partial<Pick<Deck, 'name' | 'format' | 'archetype' | 'archived'>>) => void;
   deleteDeck: (id: string) => void;
-  addDeckVersion: (deckId: string, label: string, notes?: string) => DeckVersion | null;
-  updateDeckVersion: (id: string, patch: Partial<Pick<DeckVersion, 'label' | 'notes'>>) => void;
+  addDeckVersion: (deckId: string, label: string, notes?: string, list?: string) => DeckVersion | null;
+  updateDeckVersion: (id: string, patch: Partial<Pick<DeckVersion, 'label' | 'notes' | 'list'>>) => void;
   deleteDeckVersion: (id: string) => void;
   setCurrentVersion: (deckId: string, versionId: string | undefined) => void;
   /** Versão atual de um deck pelo nome — usada ao salvar a partida. */
@@ -65,6 +66,8 @@ interface AppState {
 
   // Contadores
   setCounterPref: (key: keyof Omit<CounterPrefs, 'custom'>, on: boolean) => void;
+  /** O que o card de estatísticas leva. */
+  setSharePref: (key: keyof SharePrefs, on: boolean) => void;
   addCustomCounter: (name: string) => CustomCounter | null;
   updateCustomCounter: (id: string, patch: Partial<Pick<CustomCounter, 'name' | 'enabled'>>) => void;
   deleteCustomCounter: (id: string) => void;
@@ -83,6 +86,7 @@ const defaultSettings: Settings = {
   deckRenames: {},
   installId: '',
   counterPrefs: DEFAULT_COUNTER_PREFS,
+  sharePrefs: DEFAULT_SHARE_PREFS,
   social: DEFAULT_SOCIAL,
 };
 
@@ -267,7 +271,7 @@ export const useStore = create<AppState>()(
         }));
       },
 
-      addDeckVersion: (deckId, label, notes = '') => {
+      addDeckVersion: (deckId, label, notes = '', list = '') => {
         const trimmed = label.trim();
         if (!trimmed || !get().decks.some(d => d.id === deckId)) return null;
 
@@ -277,6 +281,7 @@ export const useStore = create<AppState>()(
           label: trimmed,
           notes: notes.trim(),
           createdAt: new Date().toISOString(),
+          list: list.trim() || undefined,
         };
         set(state => ({
           deckVersions: [...state.deckVersions, version],
@@ -414,6 +419,15 @@ export const useStore = create<AppState>()(
         }));
       },
 
+      setSharePref: (key, on) => {
+        set(state => ({
+          settings: {
+            ...state.settings,
+            sharePrefs: { ...state.settings.sharePrefs, [key]: on },
+          },
+        }));
+      },
+
       addCustomCounter: (name) => {
         const trimmed = name.trim().slice(0, 24);
         if (!trimmed) return null;
@@ -494,7 +508,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mtg-tracker-storage',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         matches: state.matches,
@@ -553,6 +567,13 @@ export const useStore = create<AppState>()(
           if (state.settings && !state.settings.social) {
             state.settings = { ...state.settings, social: DEFAULT_SOCIAL };
           }
+        }
+
+        // v4 → v5: o card de compartilhamento passa a ser configurável. Quem
+        // já usava recebe o padrão, que é o card como ele sempre foi — mais
+        // os blocos novos desligados, porque expõem nome de terceiro.
+        if (version < 5 && state.settings && !state.settings.sharePrefs) {
+          state.settings = { ...state.settings, sharePrefs: DEFAULT_SHARE_PREFS };
         }
 
         return state as AppState;

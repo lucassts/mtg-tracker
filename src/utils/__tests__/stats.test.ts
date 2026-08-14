@@ -15,8 +15,66 @@ const m = (over: Partial<Match> & { id: string }): Match => ({
 });
 
 const noFilters: Filters = {
-  format: 'All', deck: [], oppDeck: [], period: 'All', result: 'All',
+  format: 'All', deck: [], oppDeck: [], period: 'All', result: 'All', version: [],
 };
+
+describe('filtro de versão', () => {
+  const rows = [
+    m({ id: '1', deckVersion: 'v1', won: true }),
+    m({ id: '2', deckVersion: 'v2', won: false }),
+    m({ id: '3', won: true }), // salva antes de o deck ser versionado
+  ];
+
+  it('lista vazia significa todas as versões', () => {
+    expect(applyFilters(rows, noFilters)).toHaveLength(3);
+  });
+
+  it('seleciona várias versões ao mesmo tempo', () => {
+    const r = applyFilters(rows, { ...noFilters, version: ['v1', 'v2'] });
+    expect(r.map(x => x.id)).toEqual(['1', '2']);
+  });
+
+  it('string vazia pega a partida sem versão', () => {
+    const r = applyFilters(rows, { ...noFilters, version: [''] });
+    expect(r.map(x => x.id)).toEqual(['3']);
+  });
+});
+
+describe('aproveitamento por oponente e por local', () => {
+  const rows = [
+    m({ id: '1', opponentName: 'Bruno', venueName: 'Loja do Zé', won: true }),
+    m({ id: '2', opponentName: 'Bruno', venueName: 'Loja do Zé', won: false }),
+    m({ id: '3', opponentName: 'Bruno', venueName: 'Casa', won: true }),
+    m({ id: '4', won: true }), // sem oponente nem local registrado
+  ];
+
+  it('agrupa por pessoa e calcula o win rate', () => {
+    const s = computeStats(rows);
+    expect(s.oppPlayers).toEqual([
+      { l: 'Bruno', wins: 2, losses: 1, wr: 67 },
+    ]);
+  });
+
+  it('agrupa por local, do mais jogado para o menos', () => {
+    const s = computeStats(rows);
+    expect(s.venues.map(v => v.l)).toEqual(['Loja do Zé', 'Casa']);
+    expect(s.venues[0]).toMatchObject({ wins: 1, losses: 1, wr: 50 });
+  });
+
+  it('partida sem oponente ou local não vira uma linha em branco', () => {
+    const s = computeStats([m({ id: '9', won: true })]);
+    expect(s.oppPlayers).toEqual([]);
+    expect(s.venues).toEqual([]);
+  });
+
+  it('empate entra na lista mas fica fora do percentual', () => {
+    const s = computeStats([
+      m({ id: '1', opponentName: 'Ana', won: true }),
+      m({ id: '2', opponentName: 'Ana', won: false, drew: true }),
+    ]);
+    expect(s.oppPlayers).toEqual([{ l: 'Ana', wins: 1, losses: 0, wr: 100 }]);
+  });
+});
 
 describe('computeStats', () => {
   it('conta empate como empate, não como derrota', () => {

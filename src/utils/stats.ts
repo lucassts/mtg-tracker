@@ -1,10 +1,13 @@
-import { Match, Filters, ComputedStats } from '../types';
+import { Match, Filters, ComputedStats, RecordRow } from '../types';
 
 export function applyFilters(matches: Match[], filters: Filters): Match[] {
   return matches.filter(m => {
     if (filters.format && filters.format !== 'All' && m.format !== filters.format) return false;
     if (filters.deck.length > 0 && !filters.deck.includes(m.myDeck)) return false;
     if (filters.oppDeck.length > 0 && !filters.oppDeck.includes(m.oppDeck)) return false;
+    // String vazia representa "sem versão" — partida salva antes de o deck
+    // passar a ser versionado. Sem esse caso o filtro esconderia histórico.
+    if (filters.version?.length > 0 && !filters.version.includes(m.deckVersion || '')) return false;
     if (filters.period && filters.period !== 'All') {
       if (filters.period === '1d') {
         // "Hoje" = a partir da meia-noite do dia atual (horário local)
@@ -26,6 +29,31 @@ export function applyFilters(matches: Match[], filters: Filters): Match[] {
     }
     return true;
   });
+}
+
+/**
+ * Agrupa por um rótulo tirado da partida e devolve vitórias, derrotas e
+ * aproveitamento. Empate conta na lista mas fica fora do percentual — é o
+ * mesmo critério do resto do app.
+ *
+ * Partida sem o rótulo simplesmente não entra: "sem oponente registrado" não
+ * é um oponente, e viraria uma linha que ninguém sabe ler.
+ */
+function recordBy(matches: Match[], key: (m: Match) => string | undefined): RecordRow[] {
+  const map: Record<string, { wins: number; losses: number }> = {};
+  matches.forEach(m => {
+    const label = key(m)?.trim();
+    if (!label) return;
+    if (!map[label]) map[label] = { wins: 0, losses: 0 };
+    if (m.drew) return;
+    if (m.won) map[label].wins++; else map[label].losses++;
+  });
+  return Object.entries(map)
+    .map(([l, v]) => ({
+      l, wins: v.wins, losses: v.losses,
+      wr: (v.wins + v.losses) ? Math.round(v.wins / (v.wins + v.losses) * 100) : 0,
+    }))
+    .sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses) || a.l.localeCompare(b.l));
 }
 
 export function computeStats(matches: Match[]): ComputedStats {
@@ -80,6 +108,10 @@ export function computeStats(matches: Match[]): ComputedStats {
     .sort((a, b) => b.v - a.v)
     .slice(0, 5);
 
+  // Contra quem, e onde
+  const oppPlayers = recordBy(matches, m => m.opponentName);
+  const venues = recordBy(matches, m => m.venueName);
+
   // Archetypes
   const archMap: Record<string, { wins: number; total: number }> = {};
   matches.forEach(m => {
@@ -96,6 +128,6 @@ export function computeStats(matches: Match[]): ComputedStats {
     streak, streakType,
     onPlayWR, onDrawWR,
     evolution,
-    decks, opponents, archetypes,
+    decks, opponents, oppPlayers, venues, archetypes,
   };
 }
