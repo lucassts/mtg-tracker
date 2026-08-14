@@ -101,4 +101,6 @@ React Native 0.81 · Expo SDK 54 · TypeScript · Zustand · React Navigation 6 
 
 ## Licença
 
-[MIT](LICENSE). Magic: The Gathering é marca da Wizards of the Coast; este é um projeto de fã, não oficial e sem vínculo com a WotC.
+[MIT](LICENSE).
+
+Magic: The Gathering é marca da Wizards of the Coast. Este é um projeto de fã, não oficial e sem vínculo com a WotC, e não distribui dados nem imagens de cartas. Fontes, modelo de IA e demais dependências estão creditados em [NOTICE.md](NOTICE.md).

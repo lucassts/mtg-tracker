@@ -1,0 +1,22 @@
+# O projeto é editado tanto do WSL quanto do Windows. Sem isto, o autocrlf do
+# Git para Windows reescreve os finais de linha e cada troca de máquina vira um
+# diff do arquivo inteiro.
+* text=auto eol=lf
+
+# Scripts que o Windows precisa executar como estão.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binários: nunca normalizar.
+*.png    binary
+*.jpg    binary
+*.ttf    binary
+*.otf    binary
+*.gguf   binary
+*.keystore binary
+
+# Ruído no diff de PR: o lock é gerado, não revisado linha a linha.
+package-lock.json linguist-generated=true
+
+# O protótipo HTML é referência de design, não código do app.
+design_handoff/** linguist-vendored=true
