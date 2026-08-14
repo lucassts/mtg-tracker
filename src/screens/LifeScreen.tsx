@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useScreenAwake } from '../hooks/useScreenAwake';
+import { Icon } from '../components/Icon';
 import { colors } from '../theme/colors';
 import { PlayerCell } from '../components/PlayerCell';
 import { CountersModal, emptyCounters, emptyMana } from '../components/CountersModal';
@@ -27,6 +29,27 @@ interface Player {
   name: string;
 }
 
+/** Par confirmar/cancelar do reset. Renderizado duas vezes, uma girada. */
+function ResetConfirm({
+  label, cancel, onConfirm, onCancel,
+}: {
+  label: string;
+  cancel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <View style={styles.resetConfirm}>
+      <Pressable onPress={onConfirm} style={styles.resetConfirmYes}>
+        <Text style={styles.resetConfirmYesText}>{label}</Text>
+      </Pressable>
+      <Pressable onPress={onCancel} style={styles.resetConfirmNo}>
+        <Text style={styles.resetConfirmNoText}>{cancel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function LifeScreen() {
   const insets = useSafeAreaInsets();
   useScreenAwake();
@@ -50,6 +73,10 @@ export function LifeScreen() {
 
   // ── Contadores (storm, mana, veneno, energia, experiência, dano de comandante) ──
   const [showCounters, setShowCounters] = React.useState(false);
+
+  // Modal cobre o app inteiro, não só esta aba. Sair da aba Vida com os
+  // contadores abertos deixaria a folha por cima de Stats ou Configurações.
+  useFocusEffect(React.useCallback(() => () => setShowCounters(false), []));
   const [table, setTable] = React.useState<TableCounters>({ storm: 0 });
   const [counters, setCounters] = React.useState<Record<number, PlayerCounters>>({});
 
@@ -99,6 +126,7 @@ export function LifeScreen() {
       if (pc.energy > 0) n++;
       if (pc.experience > 0) n++;
       if (Object.values(pc.cmdDamage).some(v => v > 0)) n++;
+      if (Object.values(pc.custom ?? {}).some(v => v > 0)) n++;
     });
     return n;
   }, [table, counters]);
@@ -168,40 +196,6 @@ export function LifeScreen() {
 
   return (
     <View style={styles.gamePage}>
-      {/* Reset + contadores */}
-      <View style={[styles.resetContainer, { top: insets.top + 8 }]}>
-        {!confirmReset ? (
-          <View style={styles.topRow}>
-            <Pressable onPress={() => setConfirmReset(true)} style={styles.resetBtn}>
-              <Text style={styles.resetBtnText}>{lf.reset}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowCounters(true)}
-              style={[styles.resetBtn, activeCounters > 0 && styles.countersBtnOn]}
-            >
-              <Text style={[styles.resetBtnText, activeCounters > 0 && styles.countersBtnTextOn]}>
-                {lf.counters}
-                {activeCounters > 0 ? ` · ${activeCounters}` : ''}
-              </Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.resetConfirm}>
-            <Pressable onPress={doReset} style={styles.resetConfirmYes}>
-              <Text style={styles.resetConfirmYesText}>{lf.resetTo(startLife)}</Text>
-            </Pressable>
-            <Pressable onPress={() => setConfirmReset(false)} style={styles.resetConfirmNo}>
-              <Text style={styles.resetConfirmNoText}>{lf.cancelReset}</Text>
-            </Pressable>
-          </View>
-        )}
-        {!is1v1 && (
-          <Pressable onPress={() => setPhase('setup')}>
-            <Text style={styles.changePlayers}>{lf.changePlayers}</Text>
-          </Pressable>
-        )}
-      </View>
-
       {/* 2-player: rotated layout */}
       {is2p ? (
         <View style={{ flex: 1 }}>
@@ -240,6 +234,60 @@ export function LifeScreen() {
         </View>
       )}
 
+      {/*
+        Cluster central. Fica exatamente no meio da tela — que é a divisa entre
+        os jogadores em todos os layouts — para ficar à mão dos dois lados. Só
+        ícones: em mesa de 2, metade da tela está de cabeça para baixo e
+        qualquer rótulo sairia invertido para alguém.
+      */}
+      <View style={styles.centerCluster} pointerEvents="box-none">
+        {!confirmReset ? (
+          <View style={styles.clusterRow}>
+            <Pressable onPress={() => setConfirmReset(true)} style={styles.clusterBtn} hitSlop={6}>
+              <Icon name="rotate" size={17} stroke="rgba(255,255,255,0.55)" strokeWidth={1.9} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowCounters(true)}
+              style={[styles.clusterBtn, activeCounters > 0 && styles.clusterBtnOn]}
+              hitSlop={6}
+            >
+              <Icon
+                name="counters"
+                size={17}
+                stroke={activeCounters > 0 ? '#ff8a5c' : 'rgba(255,255,255,0.55)'}
+                strokeWidth={1.9}
+              />
+              {activeCounters > 0 && <View style={styles.clusterDot} />}
+            </Pressable>
+
+            {!is1v1 && (
+              <Pressable onPress={() => setPhase('setup')} style={styles.clusterBtn} hitSlop={6}>
+                <Icon name="users" size={17} stroke="rgba(255,255,255,0.55)" strokeWidth={1.9} />
+              </Pressable>
+            )}
+          </View>
+        ) : (
+          /* Confirmação em duas metades espelhadas: legível dos dois lados. */
+          <View style={styles.confirmStack}>
+            <View style={{ transform: [{ rotate: '180deg' }] }}>
+              <ResetConfirm
+                label={lf.resetTo(startLife)}
+                cancel={lf.cancelReset}
+                onConfirm={doReset}
+                onCancel={() => setConfirmReset(false)}
+              />
+            </View>
+            <ResetConfirm
+              label={lf.resetTo(startLife)}
+              cancel={lf.cancelReset}
+              onConfirm={doReset}
+              onCancel={() => setConfirmReset(false)}
+            />
+          </View>
+        )}
+      </View>
+
       <CountersModal
         visible={showCounters}
         onClose={() => setShowCounters(false)}
@@ -248,6 +296,7 @@ export function LifeScreen() {
         onTableChange={setTable}
         counters={counters}
         onCountersChange={setCounters}
+        prefs={settings.counterPrefs}
         onNewTurn={newTurn}
       />
     </View>
@@ -355,35 +404,46 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lifeBg,
     position: 'relative',
   },
-  resetContainer: {
+  centerCluster: {
     position: 'absolute',
-    top: 12,
+    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
     zIndex: 20,
   },
-  resetBtn: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+  clusterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+  },
+  clusterBtn: {
+    width: 38,
+    height: 38,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  resetBtnText: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 11,
-    fontFamily: 'JetBrainsMono',
-    letterSpacing: 0.8,
+  clusterBtnOn: {
+    backgroundColor: 'rgba(255,138,92,0.16)',
   },
-  topRow: { flexDirection: 'row', gap: 8 },
-  countersBtnOn: {
-    backgroundColor: 'rgba(212,95,60,0.22)',
-    borderColor: 'rgba(212,95,60,0.5)',
+  clusterDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#ff8a5c',
   },
-  countersBtnTextOn: { color: '#e88a6b' },
+  confirmStack: { gap: 10, alignItems: 'center' },
   resetConfirm: { flexDirection: 'row', gap: 6 },
   resetConfirmYes: {
     backgroundColor: colors.accent,

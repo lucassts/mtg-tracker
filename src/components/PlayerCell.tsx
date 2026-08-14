@@ -5,9 +5,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 /**
  * Tinta de fundo das zonas de toque. Fica forte na borda externa — onde o
  * polegar cai — e some antes de chegar no número, para não competir com ele.
+ *
+ * O vermelho e o verde aqui são mais saturados que os da paleta do app: sobre
+ * o fundo quase preto do contador, o tom sóbrio da interface some.
  */
-const MINUS_TINT = ['rgba(192,66,42,0.30)', 'rgba(192,66,42,0.06)', 'transparent'] as const;
-const PLUS_TINT = ['rgba(45,138,94,0.30)', 'rgba(45,138,94,0.06)', 'transparent'] as const;
+const MINUS_TINT = ['rgba(255,42,54,0.40)', 'rgba(255,42,54,0.09)', 'transparent'] as const;
+const PLUS_TINT = ['rgba(0,240,132,0.36)', 'rgba(0,240,132,0.08)', 'transparent'] as const;
 const TINT_STOPS = [0, 0.55, 1] as const;
 
 interface Player {
@@ -85,7 +88,7 @@ export function PlayerCell({ player, onAdjust }: PlayerCellProps) {
 
   const isDead = player.life <= 0;
   const isLow = player.life <= 5 && player.life > 0;
-  const lifeColor = isDead ? '#c0422a' : isLow ? '#e07a40' : '#fff';
+  const lifeColor = isDead ? '#ff3b47' : isLow ? '#ffab40' : '#fff';
 
   return (
     <View style={[styles.cell, isDead && styles.deadCell]}>
@@ -131,7 +134,7 @@ export function PlayerCell({ player, onAdjust }: PlayerCellProps) {
           {showDelta && delta !== 0 && (
             <Animated.Text style={[
               styles.deltaText,
-              { color: delta > 0 ? '#6fcf97' : '#eb5757', opacity },
+              { color: delta > 0 ? '#00f084' : '#ff2a36', opacity },
             ]}>
               {delta > 0 ? `+${delta}` : delta}
             </Animated.Text>
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   deadCell: {
-    backgroundColor: 'rgba(180,60,40,0.18)',
+    backgroundColor: 'rgba(255,42,54,0.16)',
   },
   leftZone: {
     position: 'absolute',

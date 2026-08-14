@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Match, Settings, PendingReview, TelemetryEvent, Deck, DeckVersion, Format, Archetype,
+  CounterPrefs, CustomCounter, DEFAULT_COUNTER_PREFS,
 } from '../types';
 import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
@@ -40,6 +41,12 @@ interface AppState {
   setCurrentVersion: (deckId: string, versionId: string | undefined) => void;
   /** Versão atual de um deck pelo nome — usada ao salvar a partida. */
   getCurrentVersionLabel: (deckName: string) => string | undefined;
+
+  // Contadores
+  setCounterPref: (key: keyof Omit<CounterPrefs, 'custom'>, on: boolean) => void;
+  addCustomCounter: (name: string) => CustomCounter | null;
+  updateCustomCounter: (id: string, patch: Partial<Pick<CustomCounter, 'name' | 'enabled'>>) => void;
+  deleteCustomCounter: (id: string) => void;
   /** Popula o app com partidas fictícias, para explorar as telas sem histórico. */
   loadDemoData: () => void;
   /** Tenta enviar a fila anônima. Silencioso: falha de rede não incomoda o usuário. */
@@ -54,6 +61,7 @@ const defaultSettings: Settings = {
   language: 'pt-BR',
   deckRenames: {},
   installId: '',
+  counterPrefs: DEFAULT_COUNTER_PREFS,
 };
 
 export const useStore = create<AppState>()(
@@ -267,6 +275,68 @@ export const useStore = create<AppState>()(
         return deckVersions.find(v => v.id === deck.currentVersionId)?.label;
       },
 
+      // ── Preferências de contadores ─────────────────────────
+
+      setCounterPref: (key, on) => {
+        set(state => ({
+          settings: {
+            ...state.settings,
+            counterPrefs: { ...state.settings.counterPrefs, [key]: on },
+          },
+        }));
+      },
+
+      addCustomCounter: (name) => {
+        const trimmed = name.trim().slice(0, 24);
+        if (!trimmed) return null;
+
+        const prefs = get().settings.counterPrefs;
+        const existing = prefs.custom.find(
+          c => c.name.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (existing) return existing;
+
+        const counter: CustomCounter = { id: newId('c'), name: trimmed, enabled: true };
+        set(state => ({
+          settings: {
+            ...state.settings,
+            counterPrefs: {
+              ...state.settings.counterPrefs,
+              custom: [...state.settings.counterPrefs.custom, counter],
+            },
+          },
+        }));
+        return counter;
+      },
+
+      updateCustomCounter: (id, patch) => {
+        set(state => ({
+          settings: {
+            ...state.settings,
+            counterPrefs: {
+              ...state.settings.counterPrefs,
+              custom: state.settings.counterPrefs.custom.map(c =>
+                c.id === id
+                  ? { ...c, ...patch, name: patch.name?.trim().slice(0, 24) || c.name }
+                  : c
+              ),
+            },
+          },
+        }));
+      },
+
+      deleteCustomCounter: (id) => {
+        set(state => ({
+          settings: {
+            ...state.settings,
+            counterPrefs: {
+              ...state.settings.counterPrefs,
+              custom: state.settings.counterPrefs.custom.filter(c => c.id !== id),
+            },
+          },
+        }));
+      },
+
       loadDemoData: () => {
         // Dados de exemplo nunca são compartilhados — não passam pela fila.
         set(state => {
@@ -296,7 +366,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mtg-tracker-storage',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         matches: state.matches,
@@ -338,6 +408,11 @@ export const useStore = create<AppState>()(
             }));
           }
           state.decks = state.decks ?? [];
+        }
+
+        // v2 → v3: preferências de contadores passam a existir.
+        if (version < 3 && state.settings && !state.settings.counterPrefs) {
+          state.settings = { ...state.settings, counterPrefs: DEFAULT_COUNTER_PREFS };
         }
 
         return state as AppState;

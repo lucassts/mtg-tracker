@@ -1,11 +1,15 @@
 import React from 'react';
 import {
   View, Text, Pressable, Modal, ScrollView, StyleSheet,
+  NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { MANA_COLORS, ManaColor, PlayerCounters, TableCounters } from '../types';
+import {
+  MANA_COLORS, ManaColor, PlayerCounters, TableCounters, CounterPrefs,
+} from '../types';
 import { useT } from '../i18n/useT';
+import { scrollPagerTo } from '../utils/scrollPagerTo';
 
 /** Cor de cada pip de mana. Segue as cores canônicas do jogo, não a paleta do app. */
 const MANA_STYLE: Record<ManaColor, { bg: string; fg: string }> = {
@@ -21,30 +25,36 @@ const MANA_STYLE: Record<ManaColor, { bg: string; fg: string }> = {
 const POISON_LETHAL = 10;
 const CMD_LETHAL = 21;
 
+/** Campos incrementáveis de um jogador. `mana`, `cmdDamage` e `custom` usam chave. */
+type BumpField = 'mana' | 'poison' | 'energy' | 'experience' | 'cmdDamage' | 'custom';
+
 export function emptyMana(): Record<ManaColor, number> {
   return { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 };
 }
 
 export function emptyCounters(): PlayerCounters {
-  return { mana: emptyMana(), poison: 0, energy: 0, experience: 0, cmdDamage: {} };
+  return { mana: emptyMana(), poison: 0, energy: 0, experience: 0, cmdDamage: {}, custom: {} };
 }
 
 // ─── Stepper: [−] rótulo valor [+] ──────────────────────────
 
+/**
+ * Emite variação (+1/−1) em vez de valor absoluto de propósito. Toque rápido
+ * — que é a norma no turno de storm — leria um valor obsoleto e perderia
+ * incrementos se cada toque calculasse `value + 1` a partir da prop.
+ */
 function Stepper({
-  label, value, onChange, danger, min = 0,
+  label, value, onDelta, danger,
 }: {
   label: string;
   value: number;
-  onChange: (next: number) => void;
+  onDelta: (d: number) => void;
   danger?: boolean;
-  min?: number;
 }) {
   const bump = (d: number) => {
-    const next = Math.max(min, value + d);
-    if (next === value) return;
+    if (d < 0 && value <= 0) return;
     Haptics.selectionAsync();
-    onChange(next);
+    onDelta(d);
   };
 
   return (
@@ -54,7 +64,7 @@ function Stepper({
         <Pressable
           onPress={() => bump(-1)}
           hitSlop={6}
-          style={[styles.stepBtn, value <= min && styles.stepBtnOff]}
+          style={[styles.stepBtn, value <= 0 && styles.stepBtnOff]}
         >
           <Text style={styles.stepBtnText}>−</Text>
         </Pressable>
@@ -72,30 +82,144 @@ function Stepper({
 // ─── Pip de mana ────────────────────────────────────────────
 
 function ManaPip({
-  color, value, onChange,
+  color, value, onDelta,
 }: {
   color: ManaColor;
   value: number;
-  onChange: (next: number) => void;
+  onDelta: (d: number) => void;
 }) {
   const style = MANA_STYLE[color];
   return (
     <View style={styles.pipWrap}>
       <Pressable
-        onPress={() => { Haptics.selectionAsync(); onChange(value + 1); }}
+        onPress={() => { Haptics.selectionAsync(); onDelta(1); }}
         style={[styles.pip, { backgroundColor: style.bg }, value > 0 && styles.pipActive]}
       >
         <Text style={[styles.pipLetter, { color: style.fg }]}>{color}</Text>
       </Pressable>
       <Text style={[styles.pipValue, value > 0 && styles.pipValueOn]}>{value}</Text>
       <Pressable
-        onPress={() => { if (value > 0) { Haptics.selectionAsync(); onChange(value - 1); } }}
+        onPress={() => { if (value > 0) { Haptics.selectionAsync(); onDelta(-1); } }}
         hitSlop={8}
         style={[styles.pipMinus, value === 0 && styles.pipMinusOff]}
       >
         <Text style={styles.pipMinusText}>−</Text>
       </Pressable>
     </View>
+  );
+}
+
+// ─── Página de um jogador ───────────────────────────────────
+
+function PlayerPage({
+  width, index, players, counters, prefs, onPatch, onBump,
+}: {
+  width: number;
+  index: number;
+  players: { id: number; name: string }[];
+  counters: PlayerCounters;
+  prefs: CounterPrefs;
+  /** Substituição direta — usada por ações que não são incremento. */
+  onPatch: (partial: Partial<PlayerCounters>) => void;
+  /** Incremento por variação, imune a toque rápido. */
+  onBump: (field: BumpField, delta: number, key?: string) => void;
+}) {
+  const t = useT();
+  const c = t.counters;
+
+  const visibleCustom = prefs.custom.filter(cc => cc.enabled);
+  const hasPlayerCounters =
+    prefs.poison || prefs.energy || prefs.experience || visibleCustom.length > 0;
+
+  return (
+    <ScrollView
+      style={{ width }}
+      contentContainerStyle={styles.pageContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Mana pool */}
+      <View style={styles.block}>
+        <View style={styles.blockHeader}>
+          <Text style={styles.blockLabel}>{c.mana}</Text>
+          <Pressable onPress={() => onPatch({ mana: emptyMana() })} hitSlop={8}>
+            <Text style={styles.linkBtnText}>{c.emptyPool}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.pipGrid}>
+          {MANA_COLORS.map(color => (
+            <ManaPip
+              key={color}
+              color={color}
+              value={counters.mana[color]}
+              onDelta={d => onBump('mana', d, color)}
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* Contadores do jogador */}
+      {hasPlayerCounters && (
+        <View style={styles.block}>
+          <Text style={styles.blockLabel}>{c.playerCounters}</Text>
+
+          {prefs.poison && (
+            <Stepper
+              label={c.poison}
+              value={counters.poison}
+              danger={counters.poison >= POISON_LETHAL}
+              onDelta={d => onBump('poison', d)}
+            />
+          )}
+          {prefs.energy && (
+            <Stepper
+              label={c.energy}
+              value={counters.energy}
+              onDelta={d => onBump('energy', d)}
+            />
+          )}
+          {prefs.experience && (
+            <Stepper
+              label={c.experience}
+              value={counters.experience}
+              onDelta={d => onBump('experience', d)}
+            />
+          )}
+          {visibleCustom.map(cc => (
+            <Stepper
+              key={cc.id}
+              label={cc.name}
+              value={counters.custom[cc.id] ?? 0}
+              onDelta={d => onBump('custom', d, cc.id)}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Dano de comandante */}
+      {prefs.commanderDamage && players.length > 1 && (
+        <View style={styles.block}>
+          <Text style={styles.blockLabel}>{c.cmdDamage}</Text>
+          <Text style={styles.blockHint}>{c.cmdDamageHint(players[index].name)}</Text>
+          {players.map((from, fromIdx) => {
+            if (fromIdx === index) return null;
+            const dmg = counters.cmdDamage[fromIdx] ?? 0;
+            return (
+              <Stepper
+                key={from.id}
+                label={c.cmdFrom(from.name)}
+                value={dmg}
+                danger={dmg >= CMD_LETHAL}
+                onDelta={d => onBump('cmdDamage', d, String(fromIdx))}
+              />
+            );
+          })}
+        </View>
+      )}
+
+      {!hasPlayerCounters && !prefs.commanderDamage && (
+        <Text style={styles.allHiddenHint}>{c.allHidden}</Text>
+      )}
+    </ScrollView>
   );
 }
 
@@ -106,47 +230,99 @@ interface Props {
   onClose: () => void;
   players: { id: number; name: string }[];
   table: TableCounters;
-  onTableChange: (next: TableCounters) => void;
+  /** Recebe função de atualização, não valor pronto: ver o comentário do Stepper. */
+  onTableChange: (update: (prev: TableCounters) => TableCounters) => void;
   counters: Record<number, PlayerCounters>;
-  onCountersChange: (next: Record<number, PlayerCounters>) => void;
+  onCountersChange: (
+    update: (prev: Record<number, PlayerCounters>) => Record<number, PlayerCounters>
+  ) => void;
+  prefs: CounterPrefs;
   /** Zera storm e o mana pool de todos. */
   onNewTurn: () => void;
 }
 
 export function CountersModal({
-  visible, onClose, players, table, onTableChange, counters, onCountersChange, onNewTurn,
+  visible, onClose, players, table, onTableChange,
+  counters, onCountersChange, prefs, onNewTurn,
 }: Props) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const c = t.counters;
 
-  // 'table' = aba da mesa; número = índice do jogador
-  const [tab, setTab] = React.useState<'table' | number>('table');
+  const [page, setPage] = React.useState(0);
+  // O sheet ocupa a largura inteira, então a janela já dá a largura da página.
+  // Medir com onLayout era uma dependência a mais para o mesmo número.
+  const { width } = useWindowDimensions();
+  const pagerRef = React.useRef<ScrollView>(null);
 
-  // Se o número de jogadores cair, a aba aberta pode deixar de existir.
+  // Se o número de jogadores cair, a página aberta pode deixar de existir.
   React.useEffect(() => {
-    if (typeof tab === 'number' && tab >= players.length) setTab('table');
-  }, [players.length, tab]);
+    if (page >= players.length) setPage(0);
+  }, [players.length, page]);
+
+  const goTo = (i: number) => {
+    setPage(i);
+    scrollPagerTo(pagerRef, i * width);
+  };
+
+  /**
+   * O deslize é a fonte da verdade; a barra de abas reflete onde ele parou.
+   * Escuta `onScroll` e não só o fim da inércia porque no navegador rolar com
+   * trackpad ou roda do mouse nunca dispara o evento de inércia.
+   */
+  const onPagerScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (next !== page && next >= 0 && next < players.length) {
+      Haptics.selectionAsync();
+      setPage(next);
+    }
+  };
 
   const patch = (idx: number, partial: Partial<PlayerCounters>) => {
-    const base = counters[idx] ?? emptyCounters();
-    onCountersChange({ ...counters, [idx]: { ...base, ...partial } });
+    onCountersChange(prev => {
+      const base = prev[idx] ?? emptyCounters();
+      return { ...prev, [idx]: { ...base, ...partial } };
+    });
   };
 
-  const setStorm = (n: number) => {
+  /** Incremento a partir do estado corrente — nunca da prop já renderizada. */
+  const bump = (idx: number, field: BumpField, delta: number, key?: string) => {
+    onCountersChange(prev => {
+      const base = prev[idx] ?? emptyCounters();
+      let next: PlayerCounters;
+
+      if (field === 'mana' && key) {
+        const cur = base.mana[key as ManaColor] ?? 0;
+        next = { ...base, mana: { ...base.mana, [key]: Math.max(0, cur + delta) } };
+      } else if (field === 'cmdDamage' && key) {
+        const cur = base.cmdDamage[Number(key)] ?? 0;
+        next = { ...base, cmdDamage: { ...base.cmdDamage, [Number(key)]: Math.max(0, cur + delta) } };
+      } else if (field === 'custom' && key) {
+        const cur = base.custom[key] ?? 0;
+        next = { ...base, custom: { ...base.custom, [key]: Math.max(0, cur + delta) } };
+      } else {
+        const f = field as 'poison' | 'energy' | 'experience';
+        next = { ...base, [f]: Math.max(0, base[f] + delta) };
+      }
+
+      return { ...prev, [idx]: next };
+    });
+  };
+
+  const bumpStorm = (delta: number) => {
     Haptics.selectionAsync();
-    onTableChange({ ...table, storm: Math.max(0, n) });
+    onTableChange(prev => ({ ...prev, storm: Math.max(0, prev.storm + delta) }));
   };
 
-  // O efeito acima corrige a aba órfã, mas só depois deste render. Até lá,
-  // `players[tab]` pode não existir — daí a checagem dupla.
-  const playerTab = typeof tab === 'number' && tab < players.length ? tab : null;
-  const current = playerTab !== null ? (counters[playerTab] ?? emptyCounters()) : null;
+  const clearStorm = () => {
+    Haptics.selectionAsync();
+    onTableChange(prev => ({ ...prev, storm: 0 }));
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
           {/* Cabeçalho */}
           <View style={styles.header}>
             <View style={styles.grabber} />
@@ -158,152 +334,94 @@ export function CountersModal({
             </View>
           </View>
 
-          {/* Abas */}
+          {/*
+            Storm fica fora do pager de propósito: é contador da mesa, não do
+            jogador, e continuar visível ao trocar de jogador é o ponto.
+          */}
+          <View style={styles.stormBar}>
+            <View style={styles.stormLeft}>
+              <Text style={styles.stormLabel}>{c.storm}</Text>
+              <Text style={styles.stormHint}>{c.stormHint}</Text>
+            </View>
+            <View style={styles.stormControls}>
+              <Pressable
+                onPress={() => bumpStorm(-1)}
+                hitSlop={6}
+                style={[styles.stormBtn, table.storm === 0 && styles.stormBtnOff]}
+              >
+                <Text style={styles.stormBtnText}>−</Text>
+              </Pressable>
+              <Text style={styles.stormValue}>{table.storm}</Text>
+              <Pressable
+                onPress={() => bumpStorm(1)}
+                hitSlop={6}
+                style={[styles.stormBtn, styles.stormBtnAccent]}
+              >
+                <Text style={styles.stormBtnText}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.stormActions}>
+            <Pressable onPress={clearStorm} hitSlop={6}>
+              <Text style={styles.linkBtnText}>{c.clearStorm}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onNewTurn();
+              }}
+              hitSlop={6}
+            >
+              <Text style={styles.linkBtnText}>{c.newTurn}</Text>
+            </Pressable>
+          </View>
+
+          {/* Abas de jogador */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.tabs}
           >
-            <Pressable
-              onPress={() => setTab('table')}
-              style={[styles.tab, tab === 'table' && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, tab === 'table' && styles.tabTextActive]}>
-                {c.tableTab}
-              </Text>
-            </Pressable>
             {players.map((p, i) => (
               <Pressable
                 key={p.id}
-                onPress={() => setTab(i)}
-                style={[styles.tab, tab === i && styles.tabActive]}
+                onPress={() => goTo(i)}
+                style={[styles.tab, page === i && styles.tabActive]}
               >
-                <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>
+                <Text style={[styles.tabText, page === i && styles.tabTextActive]}>
                   {p.name}
                 </Text>
               </Pressable>
             ))}
           </ScrollView>
 
+          {/* Páginas — uma por jogador, navegáveis por deslize */}
           <ScrollView
-            style={styles.body}
-            contentContainerStyle={styles.bodyContent}
-            showsVerticalScrollIndicator={false}
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={onPagerScroll}
+            scrollEventThrottle={32}
+            style={styles.pager}
+            // Sem isto, o scroll vertical de dentro rouba o gesto horizontal.
+            directionalLockEnabled
           >
-            {tab === 'table' ? (
-              <>
-                {/* Storm */}
-                <View style={styles.stormCard}>
-                  <Text style={styles.blockLabel}>{c.storm}</Text>
-                  <Text style={styles.stormHint}>{c.stormHint}</Text>
-                  <View style={styles.stormRow}>
-                    <Pressable
-                      onPress={() => setStorm(table.storm - 1)}
-                      style={[styles.stormBtn, table.storm === 0 && styles.stormBtnOff]}
-                    >
-                      <Text style={styles.stormBtnText}>−</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setStorm(table.storm + 1)}
-                      style={styles.stormValueZone}
-                    >
-                      <Text style={styles.stormValue}>{table.storm}</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setStorm(table.storm + 1)}
-                      style={[styles.stormBtn, styles.stormBtnAccent]}
-                    >
-                      <Text style={styles.stormBtnText}>+</Text>
-                    </Pressable>
-                  </View>
-                  <Pressable onPress={() => setStorm(0)} style={styles.linkBtn}>
-                    <Text style={styles.linkBtnText}>{c.clearStorm}</Text>
-                  </Pressable>
-                </View>
-
-                {/* Novo turno */}
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    onNewTurn();
-                  }}
-                  style={styles.turnBtn}
-                >
-                  <Text style={styles.turnBtnText}>{c.newTurn}</Text>
-                </Pressable>
-                <Text style={styles.turnHint}>{c.newTurnHint}</Text>
-              </>
-            ) : current && playerTab !== null ? (
-              <>
-                {/* Mana pool */}
-                <View style={styles.block}>
-                  <View style={styles.blockHeader}>
-                    <Text style={styles.blockLabel}>{c.mana}</Text>
-                    <Pressable
-                      onPress={() => patch(playerTab, { mana: emptyMana() })}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.linkBtnText}>{c.emptyPool}</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.pipGrid}>
-                    {MANA_COLORS.map(color => (
-                      <ManaPip
-                        key={color}
-                        color={color}
-                        value={current.mana[color]}
-                        onChange={n => patch(playerTab, { mana: { ...current.mana, [color]: n } })}
-                      />
-                    ))}
-                  </View>
-                </View>
-
-                {/* Contadores do jogador */}
-                <View style={styles.block}>
-                  <Text style={styles.blockLabel}>{c.playerCounters}</Text>
-                  <Stepper
-                    label={c.poison}
-                    value={current.poison}
-                    danger={current.poison >= POISON_LETHAL}
-                    onChange={n => patch(playerTab, { poison: n })}
-                  />
-                  <Stepper
-                    label={c.energy}
-                    value={current.energy}
-                    onChange={n => patch(playerTab, { energy: n })}
-                  />
-                  <Stepper
-                    label={c.experience}
-                    value={current.experience}
-                    onChange={n => patch(playerTab, { experience: n })}
-                  />
-                </View>
-
-                {/* Dano de comandante */}
-                {players.length > 1 && (
-                  <View style={styles.block}>
-                    <Text style={styles.blockLabel}>{c.cmdDamage}</Text>
-                    <Text style={styles.blockHint}>{c.cmdDamageHint(players[playerTab].name)}</Text>
-                    {players.map((from, fromIdx) => {
-                      if (fromIdx === playerTab) return null;
-                      const dmg = current.cmdDamage[fromIdx] ?? 0;
-                      return (
-                        <Stepper
-                          key={from.id}
-                          label={c.cmdFrom(from.name)}
-                          value={dmg}
-                          danger={dmg >= CMD_LETHAL}
-                          onChange={n => patch(playerTab, {
-                            cmdDamage: { ...current.cmdDamage, [fromIdx]: n },
-                          })}
-                        />
-                      );
-                    })}
-                  </View>
-                )}
-              </>
-            ) : null}
+            {players.map((p, i) => (
+              <PlayerPage
+                key={p.id}
+                width={width}
+                index={i}
+                players={players}
+                counters={counters[i] ?? emptyCounters()}
+                prefs={prefs}
+                onPatch={partial => patch(i, partial)}
+                onBump={(field, delta, key) => bump(i, field, delta, key)}
+              />
+            ))}
           </ScrollView>
+
+          <Text style={styles.swipeHint}>{c.swipeHint}</Text>
         </View>
       </View>
     </Modal>
@@ -317,7 +435,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    maxHeight: '88%',
+    height: '86%',
     backgroundColor: '#16150f',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
@@ -355,7 +473,64 @@ const styles = StyleSheet.create({
   },
   closeText: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
 
-  tabs: { paddingHorizontal: 20, paddingVertical: 14, gap: 8 },
+  // Barra de storm, persistente
+  stormBar: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212,95,60,0.35)',
+    backgroundColor: 'rgba(212,95,60,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  stormLeft: { flex: 1 },
+  stormLabel: {
+    fontSize: 10,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.55)',
+  },
+  stormHint: {
+    fontSize: 11,
+    fontFamily: 'Inter',
+    color: 'rgba(255,255,255,0.32)',
+    marginTop: 2,
+  },
+  stormControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stormBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  stormBtnAccent: { backgroundColor: '#d45f3c' },
+  stormBtnOff: { opacity: 0.35 },
+  stormBtnText: { color: '#fff', fontSize: 20, lineHeight: 23 },
+  stormValue: {
+    minWidth: 40,
+    textAlign: 'center',
+    fontSize: 30,
+    fontWeight: '700',
+    fontFamily: 'Inter',
+    color: '#fff',
+    letterSpacing: -1,
+  },
+  stormActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 26,
+    paddingTop: 8,
+  },
+
+  tabs: { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -373,8 +548,16 @@ const styles = StyleSheet.create({
   },
   tabTextActive: { color: '#fff' },
 
-  body: { flexGrow: 0 },
-  bodyContent: { paddingHorizontal: 20, paddingBottom: 12, gap: 14 },
+  pager: { flex: 1 },
+  pageContent: { paddingHorizontal: 20, paddingBottom: 16, gap: 14 },
+  swipeHint: {
+    textAlign: 'center',
+    fontSize: 10,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    color: 'rgba(255,255,255,0.22)',
+    paddingTop: 6,
+  },
 
   block: {
     borderRadius: 16,
@@ -403,72 +586,21 @@ const styles = StyleSheet.create({
     marginTop: -4,
     lineHeight: 16,
   },
-
-  // Storm
-  stormCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(212,95,60,0.35)',
-    backgroundColor: 'rgba(212,95,60,0.08)',
-    padding: 16,
-    gap: 6,
-    alignItems: 'center',
-  },
-  stormHint: {
-    fontSize: 11,
+  allHiddenHint: {
+    fontSize: 12,
     fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.35)',
-  },
-  stormRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginTop: 4,
-  },
-  stormBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  stormBtnAccent: { backgroundColor: '#d45f3c' },
-  stormBtnOff: { opacity: 0.35 },
-  stormBtnText: { color: '#fff', fontSize: 26, fontWeight: '400', lineHeight: 30 },
-  stormValueZone: { minWidth: 96, alignItems: 'center', paddingVertical: 4 },
-  stormValue: {
-    fontSize: 64,
-    fontWeight: '700',
-    fontFamily: 'Inter',
-    color: '#fff',
-    letterSpacing: -2,
-    lineHeight: 68,
+    color: 'rgba(255,255,255,0.32)',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
 
-  linkBtn: { paddingVertical: 4, paddingHorizontal: 8 },
   linkBtnText: {
     fontSize: 11,
     fontFamily: 'JetBrainsMono',
     letterSpacing: 0.6,
-    color: 'rgba(255,255,255,0.4)',
-  },
-
-  turnBtn: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  turnBtnText: { color: '#fff', fontSize: 14, fontWeight: '600', fontFamily: 'Inter' },
-  turnHint: {
-    fontSize: 11,
-    fontFamily: 'Inter',
-    color: 'rgba(255,255,255,0.3)',
-    textAlign: 'center',
-    marginTop: -8,
+    color: 'rgba(255,255,255,0.45)',
   },
 
   // Mana pips
@@ -540,5 +672,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     color: '#fff',
   },
-  stepperValueDanger: { color: '#e0603f' },
+  stepperValueDanger: { color: '#ff5a45' },
 });

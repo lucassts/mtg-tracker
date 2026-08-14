@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, Pressable, ScrollView, Alert, StyleSheet, TextInput,
+  View, Text, Pressable, ScrollView, Alert, StyleSheet, TextInput, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -18,6 +18,10 @@ import { Language } from '../types';
 import { useT } from '../i18n/useT';
 import { TELEMETRY_CONFIGURED } from '../config';
 import { DecksScreen } from './DecksScreen';
+import { CountersSettingsScreen } from './CountersSettingsScreen';
+
+/** Página de doações do autor. */
+const KOFI_URL = 'https://ko-fi.com/cathar1no';
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -64,6 +68,7 @@ export function SettingsScreen() {
   const pendingCount = useStore(st => st.telemetryQueue.length);
 
   const [showDecks, setShowDecks] = React.useState(false);
+  const [showCounters, setShowCounters] = React.useState(false);
   const [importStatus, setImportStatus] = React.useState<null | 'ok' | 'err'>(null);
   const [importCount, setImportCount] = React.useState(0);
 
@@ -118,6 +123,7 @@ export function SettingsScreen() {
   };
 
   if (showDecks) return <DecksScreen onBack={() => setShowDecks(false)} />;
+  if (showCounters) return <CountersSettingsScreen onBack={() => setShowCounters(false)} />;
 
   const currentLang = settings.language || 'pt-BR';
 
@@ -255,6 +261,15 @@ export function SettingsScreen() {
             <Text style={[styles.rowTitle, { flex: 1 }]}>{s.manageDecks}</Text>
             <Icon name="chev" size={14} stroke={colors.ink4} />
           </Row>
+          <View style={styles.rowDivider} />
+          <Row onPress={() => setShowCounters(true)}>
+            <Icon name="counters" size={18} stroke={colors.ink3} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>{s.counters}</Text>
+              <Text style={styles.rowSub}>{s.countersSub}</Text>
+            </View>
+            <Icon name="chev" size={14} stroke={colors.ink4} />
+          </Row>
           {matches.length === 0 && (
             <>
               <View style={styles.rowDivider} />
@@ -276,6 +291,19 @@ export function SettingsScreen() {
           </Row>
         </Card>
       </View>
+
+      {/* Apoio */}
+      <Pressable
+        style={styles.kofi}
+        onPress={() => { void Linking.openURL(KOFI_URL); }}
+      >
+        <Icon name="coffee" size={20} stroke={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.kofiTitle}>{s.kofi}</Text>
+          <Text style={styles.kofiSub}>{s.kofiSub}</Text>
+        </View>
+        <Icon name="chev" size={14} stroke={colors.accent} />
+      </Pressable>
 
       <Text style={styles.version}>{s.version}</Text>
       <View style={{ height: 20 }} />
@@ -393,6 +421,20 @@ const styles = StyleSheet.create({
     color: colors.ink3,
     marginTop: 2,
   },
+  kofi: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212,95,60,0.35)',
+    backgroundColor: colors.accentSoft,
+    marginTop: 4,
+  },
+  kofiTitle: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter', color: colors.accent },
+  kofiSub: { fontSize: 11, fontFamily: 'Inter', color: colors.ink3, marginTop: 2 },
   version: {
     textAlign: 'center',
     fontSize: 11,

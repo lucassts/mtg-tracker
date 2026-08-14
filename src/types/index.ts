@@ -53,6 +53,8 @@ export interface Settings {
   deckRenames: Record<string, string>;
   /** UUID sorteado na instalação. Identifica o aparelho, nunca a pessoa. */
   installId: string;
+  /** O que a aba de contadores mostra. */
+  counterPrefs: CounterPrefs;
 }
 
 export interface Filters {
@@ -137,12 +139,38 @@ export interface PlayerCounters {
   experience: number;
   /** Dano de comandante recebido, indexado pelo índice do jogador que causou. */
   cmdDamage: Record<number, number>;
+  /** Contadores criados pelo usuário, indexados por `CustomCounter.id`. */
+  custom: Record<string, number>;
 }
 
 export interface TableCounters {
-  /** Mágicas lançadas no turno — zera a cada novo turno. */
+  /** Mágicas lançadas no turno — zera a cada novo turno. Vale para a mesa toda. */
   storm: number;
 }
+
+/** Contador inventado pelo usuário em Configurações → Contadores. */
+export interface CustomCounter {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+/** Quais contadores aparecem na tela. Mana e storm estão sempre visíveis. */
+export interface CounterPrefs {
+  poison: boolean;
+  energy: boolean;
+  experience: boolean;
+  commanderDamage: boolean;
+  custom: CustomCounter[];
+}
+
+export const DEFAULT_COUNTER_PREFS: CounterPrefs = {
+  poison: true,
+  energy: false,
+  experience: false,
+  commanderDamage: true,
+  custom: [],
+};
 
 // ─── Telemetria anônima ─────────────────────────────────────
 

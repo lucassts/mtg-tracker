@@ -125,6 +125,38 @@ export function Icon({ name, size = 20, stroke = 'currentColor', strokeWidth = 1
         <Line x1="21" y1="21" x2="16.65" y2="16.65" {...props} />
       </>
     ),
+    // Seta circular de reset — sem texto, para funcionar de cabeça para baixo.
+    rotate: (
+      <>
+        <Path d="M3 12a9 9 0 1 0 3-6.7" {...props} />
+        <Polyline points="3 4 3 9 8 9" {...props} />
+      </>
+    ),
+    // Fichas empilhadas: o cluster de contadores.
+    counters: (
+      <>
+        <Circle cx="12" cy="6.5" r="4.5" {...props} />
+        <Path d="M4.2 12.5A9 9 0 0 0 12 17a9 9 0 0 0 7.8-4.5" {...props} />
+        <Path d="M4.2 17.5A9 9 0 0 0 12 22a9 9 0 0 0 7.8-4.5" {...props} />
+      </>
+    ),
+    users: (
+      <>
+        <Circle cx="9" cy="8" r="3.2" {...props} />
+        <Path d="M3 20a6 6 0 0 1 12 0" {...props} />
+        <Path d="M16.5 5.4a3.2 3.2 0 0 1 0 5.2" {...props} />
+        <Path d="M18 14.4A6 6 0 0 1 21 20" {...props} />
+      </>
+    ),
+    coffee: (
+      <>
+        <Path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" {...props} />
+        <Path d="M17 10.5h1.5a2.5 2.5 0 0 1 0 5H17" {...props} />
+        <Line x1="7" y1="2.5" x2="7" y2="5.5" {...props} />
+        <Line x1="11" y1="2.5" x2="11" y2="5.5" {...props} />
+        <Line x1="15" y1="2.5" x2="15" y2="5.5" {...props} />
+      </>
+    ),
   };
 
   return (
