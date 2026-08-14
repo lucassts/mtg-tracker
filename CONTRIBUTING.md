@@ -24,7 +24,6 @@ Node 20+ e o [ambiente Expo para desenvolvimento nativo](https://docs.expo.dev/g
 
 ```bash
 npm install
-npm run setup
 npx expo run:android
 ```
 

@@ -12,11 +12,18 @@ lista de arquétipos populares mantida no repositório.
 
 ## Fontes
 
-O app usa duas famílias tipográficas, baixadas em tempo de setup por
-`scripts/setup-fonts.js` e **não versionadas** neste repositório:
+O app usa duas famílias tipográficas, instaladas como dependências npm
+(`@expo-google-fonts/*`) e portanto travadas no `package-lock.json`:
 
 - **Inter** — Rasmus Andersson, [SIL Open Font License 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt)
 - **JetBrains Mono** — JetBrains, [SIL Open Font License 1.1](https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt)
+
+O texto integral de cada licença acompanha o respectivo pacote, em
+`node_modules/@expo-google-fonts/<família>/LICENSE_FONT`.
+
+Só os quatro pesos de Inter e os dois de JetBrains Mono realmente usados são
+importados, por subpath. Importar pelo índice do pacote arrastaria as ~40
+variantes de cada família para dentro do bundle.
 
 ## Modelo de linguagem
 

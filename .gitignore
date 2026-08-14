@@ -7,10 +7,6 @@ ios/
 .expo/
 *.jsbundle
 
-# Fontes. Baixe com `npm run setup` — não versionamos binários de terceiros.
-assets/fonts/*.ttf
-assets/fonts/*.otf
-
 # Build / distribuição
 dist/
 web-build/

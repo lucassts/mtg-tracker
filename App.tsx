@@ -4,15 +4,23 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AppState, View, StyleSheet } from 'react-native';
 import { registerRootComponent } from 'expo';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { TabNavigator } from './src/navigation/TabNavigator';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { useStore } from './src/store/useStore';
 import { colors } from './src/theme/colors';
+import { fontAssets } from './src/theme/typography';
+
+// Segura a splash até as fontes entrarem, senão a primeira tela pisca na fonte
+// do sistema e reflui.
+void SplashScreen.preventAutoHideAsync();
 
 function AppRoot() {
   const onboarded = useStore(s => s.settings.onboarded);
   const flushTelemetry = useStore(s => s.flushTelemetry);
+  const [fontsLoaded, fontError] = useFonts(fontAssets);
 
   // Tenta esvaziar a fila anônima ao abrir e sempre que o app volta ao primeiro
   // plano — é quando a conexão costuma estar de volta. Sem fila ou com o
@@ -24,6 +32,15 @@ function AppRoot() {
     });
     return () => sub.remove();
   }, [flushTelemetry]);
+
+  // Falha ao carregar fonte não impede o app de abrir: o texto sai na fonte do
+  // sistema, o que é feio mas utilizável.
+  React.useEffect(() => {
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync();
+    if (fontError) console.warn('[App] fontes não carregadas:', fontError);
+  }, [fontsLoaded, fontError]);
+
+  if (!fontsLoaded && !fontError) return null;
 
   if (!onboarded) {
     return <OnboardingScreen />;

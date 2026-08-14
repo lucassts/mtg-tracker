@@ -45,7 +45,6 @@ Requer Node 20+ e o [ambiente Expo para desenvolvimento nativo](https://docs.exp
 
 ```bash
 npm install
-npm run setup          # baixa Inter e JetBrains Mono para assets/fonts
 npx expo run:android   # ou: npx expo run:ios
 ```
 
@@ -77,7 +76,7 @@ Variáveis `EXPO_PUBLIC_*` são embutidas no bundle — são públicas por defin
 ## Estrutura
 
 ```
-App.tsx                  raiz: onboarding, navegação, flush da telemetria
+App.tsx                  raiz: fontes, onboarding, navegação, flush da telemetria
 src/
   components/            componentes reutilizáveis (charts/ para os gráficos SVG)
   config.ts              variáveis de ambiente do build
@@ -87,7 +86,7 @@ src/
   screens/               uma tela por arquivo
   services/              llamaExtractor (IA local) · telemetry (envio anônimo)
   store/                 Zustand + persistência em AsyncStorage
-  theme/                 cores, tipografia, espaçamento
+  theme/                 cores, registro das fontes, espaçamento
   types/                 tipos compartilhados
   utils/                 estatísticas e CSV
 supabase/schema.sql      esquema e políticas da telemetria
