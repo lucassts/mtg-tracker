@@ -50,7 +50,22 @@ npm install
 npx expo run:android   # ou: npx expo run:ios
 ```
 
-`npx expo start` sozinho não basta: `llama.rn` é um módulo nativo e não roda no Expo Go.
+### Por que não dá para usar o Expo Go
+
+O Expo Go só carrega os módulos nativos que a Expo empacota dentro dele. Este app usa [`llama.rn`](https://github.com/mybigday/llama.rn), que é módulo nativo de terceiro e entra como config plugin — o Expo Go ignora plugins e quebra no primeiro `import`.
+
+O substituto com o mesmo fluxo é o **development build**: um APK seu, com os módulos nativos do projeto dentro, que se conecta ao Metro igual ao Expo Go.
+
+```bash
+# uma vez, ou sempre que entrar/sair um módulo nativo
+npx expo run:android            # local, precisa de Android Studio
+eas build -p android --profile development   # ou na nuvem
+
+# no dia a dia, igual ao Expo Go
+npx expo start --dev-client
+```
+
+Trocar código JavaScript não exige rebuild — só recarregar. Rebuild é necessário quando muda dependência nativa ou a SDK do Expo.
 
 ### Comandos
 
