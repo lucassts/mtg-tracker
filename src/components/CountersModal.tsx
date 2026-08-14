@@ -304,7 +304,12 @@ export function CountersModal({
 
   const dragHandlers = React.useMemo(
     () => PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+      // Captura já no toque, e não só depois de detectar movimento: a
+      // negociação por movimento se perdia e a folha não fechava. O ✕ é um
+      // Pressable dentro do cabeçalho e ganha a disputa por ser mais profundo,
+      // então continua clicável.
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && g.dy > Math.abs(g.dx),
       onPanResponderMove: (_e, g) => {
         // Só para baixo: puxar para cima não deve descolar a folha do fundo.
         if (g.dy > 0) dragY.setValue(g.dy);
@@ -494,7 +499,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.09)',
   },
-  header: { paddingHorizontal: 20, paddingTop: 10 },
+  // paddingBottom generoso: o cabeçalho é a área de arrastar, precisa de alvo.
+  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6 },
   grabber: {
     alignSelf: 'center',
     width: 36,
