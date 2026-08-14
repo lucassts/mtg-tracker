@@ -10,11 +10,23 @@
  * É esse o caso de quem clonar o repositório sem configurar nada.
  */
 
+import { Platform } from 'react-native';
+
+/**
+ * A extração por IA depende de `llama.rn`, que é código nativo. O preview web
+ * existe para testar interface — contador de vida, decks, estatísticas — e não
+ * consegue rodar o modelo.
+ */
+export const AI_AVAILABLE = Platform.OS !== 'web';
+
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-/** Tabela que recebe os eventos anônimos. */
-export const TELEMETRY_TABLE = 'matches_anon';
+/**
+ * Função RPC que recebe os eventos anônimos. O app não escreve na tabela
+ * diretamente — ver o comentário em supabase/schema.sql.
+ */
+export const INGEST_FUNCTION = 'ingest_matches';
 
 /** Só tenta enviar se as duas variáveis existirem. */
 export const TELEMETRY_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);

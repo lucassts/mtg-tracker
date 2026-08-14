@@ -4,18 +4,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
 import { Toggle } from '../components/Toggle';
 import { Badge } from '../components/Badge';
 import { DeckSelector } from '../components/DeckSelector';
 import { useStore } from '../store/useStore';
-import { exportCSV, parseCSV } from '../utils/csv';
+import { useRecentDecks } from '../store/selectors';
+import { parseCSV } from '../utils/csv';
+import { exportCSV } from '../utils/exportCsv';
+import { readTextFile } from '../utils/readTextFile';
 import { Language } from '../types';
 import { useT } from '../i18n/useT';
-import { isDatabaseDeck } from '../data/decks';
 import { TELEMETRY_CONFIGURED } from '../config';
+import { DecksScreen } from './DecksScreen';
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -38,114 +40,6 @@ function Row({ children, onPress, style }: {
   );
 }
 
-// ─── ManageDecksScreen ──────────────────────────────────────
-
-function ManageDecksScreen({ onBack }: { onBack: () => void }) {
-  const t = useT();
-  const md = t.manageDecks;
-  const matches = useStore(s => s.matches);
-  const renameDecks = useStore(s => s.renameDecks);
-  const [query, setQuery] = React.useState('');
-  const [editing, setEditing] = React.useState<string | null>(null);
-  const [editValue, setEditValue] = React.useState('');
-
-  const decks = React.useMemo(() => {
-    const map: Record<string, { count: number; wins: number; format: string }> = {};
-    matches.forEach(m => {
-      if (m.myDeck) {
-        if (!map[m.myDeck]) map[m.myDeck] = { count: 0, wins: 0, format: m.format };
-        map[m.myDeck].count++;
-        if (m.won) map[m.myDeck].wins++;
-      }
-    });
-    return Object.entries(map)
-      .filter(([name]) => !isDatabaseDeck(name))  // somente decks criados pelo usuário
-      .map(([name, v]) => ({ name, ...v, wr: Math.round(v.wins / v.count * 100) }))
-      .sort((a, b) => b.count - a.count);
-  }, [matches]);
-
-  const filtered = query
-    ? decks.filter(d => d.name.toLowerCase().includes(query.toLowerCase()))
-    : decks;
-
-  const startEdit = (name: string) => {
-    setEditing(name);
-    setEditValue(name);
-  };
-
-  const confirmEdit = () => {
-    if (editing && editValue.trim() && editValue.trim() !== editing) {
-      renameDecks(editing, editValue.trim());
-    }
-    setEditing(null);
-  };
-
-  return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.headerRow}>
-        <Pressable style={styles.backBtn} onPress={onBack}>
-          <Icon name="back" size={16} stroke={colors.ink} />
-          <Text style={styles.backText}>{md.back}</Text>
-        </Pressable>
-        <Text style={[styles.pageTitle, { fontSize: 18, marginBottom: 0 }]}>{md.title}</Text>
-      </View>
-
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder={md.search}
-        placeholderTextColor={colors.ink4}
-        style={styles.searchInput}
-      />
-
-      <Card>
-        {filtered.length === 0 && (
-          <View style={{ padding: 20, alignItems: 'center', gap: 4 }}>
-            <Text style={styles.emptyText}>{md.empty}</Text>
-            <Text style={[styles.rowSub, { textAlign: 'center' }]}>{md.emptySub}</Text>
-          </View>
-        )}
-        {filtered.map((d, i) => (
-          <View key={d.name} style={[styles.row, i < filtered.length - 1 && styles.rowBorder]}>
-            {editing === d.name ? (
-              <View style={styles.editRow}>
-                <TextInput
-                  autoFocus
-                  value={editValue}
-                  onChangeText={setEditValue}
-                  onSubmitEditing={confirmEdit}
-                  style={styles.editInput}
-                />
-                <Pressable style={styles.editSaveBtn} onPress={confirmEdit}>
-                  <Text style={styles.editSaveText}>{md.save}</Text>
-                </Pressable>
-                <Pressable style={styles.editCancelBtn} onPress={() => setEditing(null)}>
-                  <Text style={styles.editCancelText}>✕</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{d.name}</Text>
-                  <Text style={styles.rowSub}>{d.format} · {md.matches(d.count)}</Text>
-                </View>
-                <Text style={[styles.wrText, { color: d.wr >= 50 ? colors.good : colors.bad }]}>
-                  {d.wr}%
-                </Text>
-                <Pressable onPress={() => startEdit(d.name)} hitSlop={8}>
-                  <Icon name="edit" size={15} stroke={colors.ink4} />
-                </Pressable>
-              </>
-            )}
-          </View>
-        ))}
-      </Card>
-
-      <View style={{ height: 20 }} />
-    </ScrollView>
-  );
-}
-
 // ─── SettingsScreen ─────────────────────────────────────────
 
 const LANGUAGES: { code: Language; label: string; sub: string }[] = [
@@ -162,7 +56,7 @@ export function SettingsScreen() {
   const s = t.settings;
   const settings = useStore(st => st.settings);
   const matches = useStore(st => st.matches);
-  const recentDecks = useStore(st => st.getRecentDecks());
+  const recentDecks = useRecentDecks();
   const updateSettings = useStore(st => st.updateSettings);
   const deleteAllData = useStore(st => st.deleteAllData);
   const importMatches = useStore(st => st.importMatches);
@@ -193,7 +87,7 @@ export function SettingsScreen() {
       if (result.canceled) return;
 
       const picked = result.assets[0];
-      const text = new File(picked.uri).textSync();
+      const text = await readTextFile(picked.uri);
       const parsed = parseCSV(text);
 
       if (parsed.length === 0) {
@@ -223,7 +117,7 @@ export function SettingsScreen() {
     );
   };
 
-  if (showDecks) return <ManageDecksScreen onBack={() => setShowDecks(false)} />;
+  if (showDecks) return <DecksScreen onBack={() => setShowDecks(false)} />;
 
   const currentLang = settings.language || 'pt-BR';
 

@@ -50,20 +50,76 @@ create index if not exists matches_anon_format_idx  on public.matches_anon (form
 create index if not exists matches_anon_install_idx on public.matches_anon (install_id);
 
 -- ── Row Level Security ──────────────────────────────────────
--- Com RLS ligada e apenas uma policy de INSERT, a chave `anon` consegue
--- escrever e nada mais: não lê, não altera, não apaga. Quem quiser analisar
--- usa a service_role no dashboard, que ignora RLS.
+-- RLS ligada e NENHUMA policy para `anon`: a chave pública não lê, não escreve,
+-- não altera e não apaga a tabela diretamente. O único caminho de entrada é a
+-- função `ingest_matches` abaixo. Quem quiser analisar usa a service_role no
+-- dashboard, que ignora RLS.
 
 alter table public.matches_anon enable row level security;
 
+-- Remove a policy da primeira versão do esquema, que permitia insert direto.
 drop policy if exists "anon pode inserir" on public.matches_anon;
-create policy "anon pode inserir"
-  on public.matches_anon
-  for insert
-  to anon
-  with check (true);
 
--- Nenhuma policy de select/update/delete para `anon`: negado por padrão.
+-- ── Ingestão idempotente ────────────────────────────────────
+--
+-- Por que uma função em vez de inserir direto na tabela:
+--
+-- O caminho óbvio seria POST na tabela com `Prefer: resolution=ignore-duplicates`.
+-- Só que isso é um upsert para o PostgREST, e upsert exige permissão de UPDATE.
+-- Dar UPDATE ao `anon` deixaria qualquer pessoa sobrescrever linhas alheias.
+--
+-- Sem o ignore-duplicates, reenviar um lote que na verdade chegou devolve 409 e
+-- derruba o lote inteiro — a fila do aparelho travaria para sempre no primeiro
+-- reenvio, que é exatamente o caso em que a resposta se perdeu mas o servidor
+-- gravou.
+--
+-- `security definer` + `on conflict do nothing` resolve os dois: reenvio é
+-- silenciosamente ignorado e o `anon` nunca ganha UPDATE.
+
+create or replace function public.ingest_matches(events jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inserted integer;
+begin
+  if jsonb_typeof(events) <> 'array' then
+    raise exception 'events precisa ser um array json';
+  end if;
+
+  -- Teto por chamada: o app manda lotes de 50.
+  if jsonb_array_length(events) > 100 then
+    raise exception 'lote grande demais (max 100)';
+  end if;
+
+  insert into public.matches_anon (
+    event_id, install_id, format, archetype, my_deck, opp_deck,
+    on_play, won, drew, played_week, app_version
+  )
+  select
+    (e ->> 'event_id')::uuid,
+    (e ->> 'install_id')::uuid,
+    e ->> 'format',
+    e ->> 'archetype',
+    left(coalesce(e ->> 'my_deck', ''), 80),
+    left(coalesce(e ->> 'opp_deck', ''), 80),
+    (e ->> 'on_play')::boolean,
+    (e ->> 'won')::boolean,
+    coalesce((e ->> 'drew')::boolean, false),
+    e ->> 'played_week',
+    left(coalesce(e ->> 'app_version', ''), 20)
+  from jsonb_array_elements(events) as e
+  on conflict (event_id) do nothing;
+
+  get diagnostics inserted = row_count;
+  return inserted;
+end;
+$$;
+
+revoke all on function public.ingest_matches(jsonb) from public;
+grant execute on function public.ingest_matches(jsonb) to anon;
 
 -- ── Visões de análise ───────────────────────────────────────
 -- Materializar não é necessário no começo; são views simples.

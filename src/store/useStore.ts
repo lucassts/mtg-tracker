@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Match, Settings, PendingReview, TelemetryEvent } from '../types';
+import {
+  Match, Settings, PendingReview, TelemetryEvent, Deck, DeckVersion, Format, Archetype,
+} from '../types';
 import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
+import { getArchetypeForDeck } from '../data/decks';
+
+/** Contador local para ids: `Date.now()` colide quando dois somem no mesmo ms. */
+let idCounter = 0;
+const newId = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${(idCounter++).toString(36)}`;
 
 interface AppState {
   matches: Match[];
@@ -11,6 +18,8 @@ interface AppState {
   pendingReview: PendingReview | null;
   /** Eventos anônimos aguardando envio. Vazio quando o compartilhamento está desligado. */
   telemetryQueue: TelemetryEvent[];
+  decks: Deck[];
+  deckVersions: DeckVersion[];
 
   // Actions
   addMatch: (match: Omit<Match, 'id' | 'date'>) => void;
@@ -18,9 +27,19 @@ interface AppState {
   deleteAllData: () => void;
   updateSettings: (partial: Partial<Settings>) => void;
   setPendingReview: (review: PendingReview | null) => void;
-  getRecentDecks: () => string[];
   renameDecks: (oldName: string, newName: string) => void;
   importMatches: (incoming: Match[]) => void;
+
+  // Decks
+  addDeck: (input: { name: string; format: Format; archetype?: Archetype }) => Deck | null;
+  updateDeck: (id: string, patch: Partial<Pick<Deck, 'name' | 'format' | 'archetype' | 'archived'>>) => void;
+  deleteDeck: (id: string) => void;
+  addDeckVersion: (deckId: string, label: string, notes?: string) => DeckVersion | null;
+  updateDeckVersion: (id: string, patch: Partial<Pick<DeckVersion, 'label' | 'notes'>>) => void;
+  deleteDeckVersion: (id: string) => void;
+  setCurrentVersion: (deckId: string, versionId: string | undefined) => void;
+  /** Versão atual de um deck pelo nome — usada ao salvar a partida. */
+  getCurrentVersionLabel: (deckName: string) => string | undefined;
   /** Popula o app com partidas fictícias, para explorar as telas sem histórico. */
   loadDemoData: () => void;
   /** Tenta enviar a fila anônima. Silencioso: falha de rede não incomoda o usuário. */
@@ -47,11 +66,15 @@ export const useStore = create<AppState>()(
       settings: defaultSettings,
       pendingReview: null,
       telemetryQueue: [],
+      decks: [],
+      deckVersions: [],
 
       addMatch: (matchData) => {
         const match: Match = {
-          id: 'm' + Date.now(),
+          id: newId('m'),
           date: new Date().toISOString(),
+          // Carimba a versão em uso do deck, se o usuário mantém versões.
+          deckVersion: get().getCurrentVersionLabel(matchData.myDeck),
           ...matchData,
         };
 
@@ -86,8 +109,8 @@ export const useStore = create<AppState>()(
       },
 
       deleteAllData: () => {
-        // Apagar tudo apaga também o que ainda não foi enviado.
-        set({ matches: [], telemetryQueue: [] });
+        // Apagar tudo apaga também os decks e o que ainda não foi enviado.
+        set({ matches: [], telemetryQueue: [], decks: [], deckVersions: [] });
       },
 
       updateSettings: (partial) => {
@@ -107,11 +130,11 @@ export const useStore = create<AppState>()(
         set({ pendingReview: review });
       },
 
-      getRecentDecks: () => {
-        const { matches } = get();
-        return [...new Set(matches.map(m => m.myDeck).filter(Boolean))].slice(0, 5);
-      },
-
+      /**
+       * Ponto único de renome. Precisa varrer histórico, padrão e a entidade
+       * deck ao mesmo tempo: se algum ficar para trás, as estatísticas se
+       * partem em dois decks com nomes diferentes.
+       */
       renameDecks: (oldName: string, newName: string) => {
         const trimmed = newName.trim();
         if (!trimmed || trimmed === oldName) return;
@@ -121,6 +144,7 @@ export const useStore = create<AppState>()(
             myDeck: m.myDeck === oldName ? trimmed : m.myDeck,
             oppDeck: m.oppDeck === oldName ? trimmed : m.oppDeck,
           })),
+          decks: state.decks.map(d => d.name === oldName ? { ...d, name: trimmed } : d),
           settings: {
             ...state.settings,
             defaultDeck: state.settings.defaultDeck === oldName ? trimmed : state.settings.defaultDeck,
@@ -135,6 +159,112 @@ export const useStore = create<AppState>()(
           const newMatches = incoming.filter(m => m.id && !existingIds.has(m.id));
           return { matches: [...newMatches, ...state.matches] };
         });
+      },
+
+      // ── Decks ──────────────────────────────────────────────
+
+      addDeck: ({ name, format, archetype }) => {
+        const trimmed = name.trim();
+        if (!trimmed) return null;
+
+        // Nome é a chave que liga deck a partida, então não pode duplicar.
+        const existing = get().decks.find(
+          d => d.name.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (existing) return existing;
+
+        const deck: Deck = {
+          id: newId('d'),
+          name: trimmed,
+          format,
+          archetype: archetype ?? getArchetypeForDeck(trimmed),
+          createdAt: new Date().toISOString(),
+        };
+        set(state => ({ decks: [...state.decks, deck] }));
+        return deck;
+      },
+
+      updateDeck: (id, patch) => {
+        const deck = get().decks.find(d => d.id === id);
+        if (!deck) return;
+
+        const { name, ...rest } = patch;
+        const nextName = name?.trim();
+        // `renameDecks` já cuida do nome em toda parte, inclusive aqui.
+        if (nextName && nextName !== deck.name) get().renameDecks(deck.name, nextName);
+
+        if (Object.keys(rest).length > 0) {
+          set(state => ({
+            decks: state.decks.map(d => d.id === id ? { ...d, ...rest } : d),
+          }));
+        }
+      },
+
+      deleteDeck: (id) => {
+        // Só some da lista de decks: as partidas jogadas com ele continuam,
+        // porque apagar histórico não é o que "excluir deck" deveria significar.
+        set(state => ({
+          decks: state.decks.filter(d => d.id !== id),
+          deckVersions: state.deckVersions.filter(v => v.deckId !== id),
+        }));
+      },
+
+      addDeckVersion: (deckId, label, notes = '') => {
+        const trimmed = label.trim();
+        if (!trimmed || !get().decks.some(d => d.id === deckId)) return null;
+
+        const version: DeckVersion = {
+          id: newId('v'),
+          deckId,
+          label: trimmed,
+          notes: notes.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        set(state => ({
+          deckVersions: [...state.deckVersions, version],
+          // Versão nova vira a atual: é sempre isso que se quer ao criar uma.
+          decks: state.decks.map(d =>
+            d.id === deckId ? { ...d, currentVersionId: version.id } : d
+          ),
+        }));
+        return version;
+      },
+
+      updateDeckVersion: (id, patch) => {
+        set(state => ({
+          deckVersions: state.deckVersions.map(v =>
+            v.id === id
+              ? { ...v, ...patch, label: patch.label?.trim() || v.label }
+              : v
+          ),
+        }));
+      },
+
+      deleteDeckVersion: (id) => {
+        set(state => ({
+          deckVersions: state.deckVersions.filter(v => v.id !== id),
+          decks: state.decks.map(d =>
+            d.currentVersionId === id ? { ...d, currentVersionId: undefined } : d
+          ),
+        }));
+      },
+
+      setCurrentVersion: (deckId, versionId) => {
+        set(state => ({
+          decks: state.decks.map(d =>
+            d.id === deckId ? { ...d, currentVersionId: versionId } : d
+          ),
+        }));
+      },
+
+      getCurrentVersionLabel: (deckName) => {
+        if (!deckName) return undefined;
+        const { decks, deckVersions } = get();
+        const deck = decks.find(
+          d => d.name.toLowerCase() === deckName.trim().toLowerCase()
+        );
+        if (!deck?.currentVersionId) return undefined;
+        return deckVersions.find(v => v.id === deck.currentVersionId)?.label;
       },
 
       loadDemoData: () => {
@@ -166,15 +296,18 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mtg-tracker-storage',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         matches: state.matches,
         settings: state.settings,
         telemetryQueue: state.telemetryQueue,
+        decks: state.decks,
+        deckVersions: state.deckVersions,
       }),
       migrate: (persisted, version) => {
         const state = persisted as Partial<AppState>;
+
         // v0 → v1: instalações antigas nasceram com 48 partidas fictícias e sem
         // installId. Remove o seed e sorteia o id, sem tocar no que for real.
         if (version === 0 && state.matches) {
@@ -184,6 +317,29 @@ export const useStore = create<AppState>()(
         if (state.settings && !state.settings.installId) {
           state.settings = { ...state.settings, installId: newInstallId() };
         }
+
+        // v1 → v2: decks passam a ser entidade. Cria um registro para cada nome
+        // que já aparece no histórico, para a tela de decks não nascer vazia
+        // para quem já usava o app.
+        if (version < 2) {
+          state.deckVersions = state.deckVersions ?? [];
+          if (!state.decks?.length && state.matches?.length) {
+            const seen = new Map<string, Match>();
+            state.matches.forEach(m => {
+              const key = m.myDeck?.trim();
+              if (key && !seen.has(key.toLowerCase())) seen.set(key.toLowerCase(), m);
+            });
+            state.decks = [...seen.values()].map(m => ({
+              id: newId('d'),
+              name: m.myDeck.trim(),
+              format: m.format,
+              archetype: getArchetypeForDeck(m.myDeck.trim()),
+              createdAt: m.date,
+            }));
+          }
+          state.decks = state.decks ?? [];
+        }
+
         return state as AppState;
       },
     }

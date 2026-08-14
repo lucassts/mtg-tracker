@@ -1,5 +1,3 @@
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { Match } from '../types';
 
 /**
@@ -7,7 +5,7 @@ import { Match } from '../types';
  * duplique partidas, e `drew` entra porque sem ela todo empate volta como derrota.
  */
 export const CSV_HEADERS = [
-  'id', 'date', 'format', 'myDeck', 'oppDeck',
+  'id', 'date', 'format', 'myDeck', 'deckVersion', 'oppDeck',
   'archetype', 'onPlay', 'won', 'drew', 'notes',
 ] as const;
 
@@ -102,21 +100,12 @@ export function parseCSV(text: string, now: number = Date.now()): Match[] {
     if (!obj.id) obj.id = `imp_${now}_${idx}`;
     if (!obj.date) obj.date = new Date(now).toISOString();
     if (obj.drew == null) obj.drew = false;
+    // Coluna vazia significa "sem versão", não uma versão chamada "".
+    if (!obj.deckVersion) delete obj.deckVersion;
 
     return obj as unknown as Match;
   });
 }
 
-export async function exportCSV(matches: Match[]): Promise<void> {
-  const file = new File(Paths.document, 'mtg-matches.csv');
-  file.create({ overwrite: true });
-  file.write(toCSV(matches));
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: 'text/csv',
-      dialogTitle: 'Exportar partidas MTG',
-      UTI: 'public.comma-separated-values-text',
-    });
-  }
-}
+/** Nome do arquivo gerado na exportação. */
+export const CSV_FILENAME = 'mtg-matches.csv';

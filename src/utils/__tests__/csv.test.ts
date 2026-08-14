@@ -47,6 +47,15 @@ describe('parseCSV', () => {
     expect(parseCSV(toCSV(matches))).toEqual(matches);
   });
 
+  it('preserva a versão do deck, e ausência de versão continua ausente', () => {
+    const [comVersao, semVersao] = parseCSV(toCSV([
+      { ...base, deckVersion: 'v3 pós-ban' },
+      { ...base, id: 'm2' },
+    ]));
+    expect(comVersao.deckVersion).toBe('v3 pós-ban');
+    expect(semVersao).not.toHaveProperty('deckVersion');
+  });
+
   it('sobrevive a nota com quebra de linha no meio', () => {
     const matches: Match[] = [
       { ...base, notes: 'primeira linha\nsegunda, com vírgula\n"terceira"' },

@@ -15,13 +15,18 @@ import { Badge } from '../components/Badge';
 import { Icon } from '../components/Icon';
 import { MatchForm } from '../components/MatchForm';
 import { useStore } from '../store/useStore';
+import { useRecentDecks } from '../store/selectors';
 import { useT } from '../i18n/useT';
 import { extractMatch, getLlamaContext, getModelSize, MODEL_LABEL } from '../services/llamaExtractor';
 import { ModelDownloadScreen } from './ModelDownloadScreen';
+import { AI_AVAILABLE } from '../config';
 
 type State = 'idle' | 'recording' | 'processing';
-/** absent = ainda não baixado · loading = inicializando o contexto · ready = pronto */
-type ModelState = 'checking' | 'absent' | 'loading' | 'ready';
+/**
+ * absent = ainda não baixado · loading = inicializando o contexto ·
+ * ready = pronto · unsupported = preview web, onde não há modelo nativo
+ */
+type ModelState = 'checking' | 'absent' | 'loading' | 'ready' | 'unsupported';
 
 function PulseRing({ delay }: { delay: number }) {
   const scale = React.useRef(new Animated.Value(1)).current;
@@ -78,7 +83,7 @@ export function HomeScreen() {
   const h = t.home;
   const navigation = useNavigation<any>();
   const settings = useStore(s => s.settings);
-  const recentDecks = useStore(s => s.getRecentDecks());
+  const recentDecks = useRecentDecks();
   const addMatch = useStore(s => s.addMatch);
   const setPendingReview = useStore(s => s.setPendingReview);
 
@@ -88,6 +93,7 @@ export function HomeScreen() {
   const [elapsed, setElapsed] = React.useState(0);
   const [modelState, setModelState] = React.useState<ModelState>('checking');
   const [showDownload, setShowDownload] = React.useState(false);
+  const [notice, setNotice] = React.useState<string | null>(null);
   const modelReady = modelState === 'ready';
 
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -102,6 +108,10 @@ export function HomeScreen() {
    * utilizável: só as entradas por voz e por texto ficam atrás do download.
    */
   const prepareModel = React.useCallback(async () => {
+    if (!AI_AVAILABLE) {
+      setModelState('unsupported');
+      return;
+    }
     const size = await getModelSize();
     if (size < 100_000_000) {
       setModelState('absent');
@@ -119,8 +129,12 @@ export function HomeScreen() {
 
   React.useEffect(() => { void prepareModel(); }, [prepareModel]);
 
-  /** Retorna true quando o fluxo pode seguir; senão abre a tela de download. */
+  /** Retorna true quando o fluxo pode seguir; senão explica por que não dá. */
   const requireModel = () => {
+    if (modelState === 'unsupported') {
+      setNotice(h.webOnlyNotice);
+      return false;
+    }
     if (modelState === 'absent') {
       setShowDownload(true);
       return false;
@@ -296,6 +310,7 @@ export function HomeScreen() {
         <Badge
           label={
             modelReady ? h.badgeReady
+            : modelState === 'unsupported' ? h.badgeWeb
             : modelState === 'absent' ? h.badgeAbsent
             : h.badgeLoading
           }
@@ -312,7 +327,15 @@ export function HomeScreen() {
         <Text style={[styles.timer, { color: timerColor }]}>{fmt(elapsed)}</Text>
         <Waveform active={isRecording} />
         {!isDark && (
-          <Text style={styles.hint}>{h.holdMic}</Text>
+          <Text style={styles.hint}>
+            {modelState === 'unsupported' ? h.webOnlyHint : h.holdMic}
+          </Text>
+        )}
+        {notice && (
+          <Pressable style={styles.notice} onPress={() => setNotice(null)}>
+            <Text style={styles.noticeText}>{notice}</Text>
+            <Text style={styles.noticeDismiss}>{h.dismiss}</Text>
+          </Pressable>
         )}
         {isRecording && (
           <Text style={styles.hint2}>{h.release}</Text>
@@ -490,6 +513,31 @@ const styles = StyleSheet.create({
   },
   timer: { fontSize: 42, fontWeight: '600', letterSpacing: 3 },
   hint: { fontSize: 14, color: colors.ink2, textAlign: 'center', maxWidth: 280, lineHeight: 22 },
+  notice: {
+    maxWidth: 320,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    gap: 6,
+  },
+  noticeText: {
+    fontSize: 12,
+    fontFamily: 'Inter',
+    color: colors.ink2,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  noticeDismiss: {
+    fontSize: 10,
+    fontFamily: 'JetBrainsMono',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.ink4,
+  },
   hint2: { fontSize: 14, color: '#b5b29f', textAlign: 'center', maxWidth: 280, lineHeight: 22 },
   modelLabel: { fontSize: 10, color: '#6b685c' },
   actionRow: {

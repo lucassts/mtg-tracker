@@ -10,6 +10,35 @@ export interface Match {
   /** true = empate/draw. Retrocompat: undefined means loss when won=false */
   drew?: boolean;
   notes: string;
+  /**
+   * Rótulo da versão do deck no momento em que a partida foi salva.
+   * É uma cópia, não uma referência: renomear a versão depois não reescreve o
+   * histórico, que é o ponto de comparar versões entre si.
+   */
+  deckVersion?: string;
+}
+
+// ─── Decks e versões ────────────────────────────────────────
+
+export interface Deck {
+  id: string;
+  name: string;
+  format: Format;
+  archetype?: Archetype;
+  /** Versão em uso. Aponta para `DeckVersion.id`. */
+  currentVersionId?: string;
+  createdAt: string;
+  /** Arquivado some das listas de seleção mas preserva o histórico. */
+  archived?: boolean;
+}
+
+export interface DeckVersion {
+  id: string;
+  deckId: string;
+  /** Rótulo curto: "v3", "pós-ban", "sideboard novo". */
+  label: string;
+  notes: string;
+  createdAt: string;
 }
 
 export type Language = 'en-US' | 'pt-BR' | 'ja-JP';

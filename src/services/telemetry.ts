@@ -21,11 +21,14 @@ import * as Crypto from 'expo-crypto';
 import { Match, TelemetryEvent } from '../types';
 import {
   APP_VERSION,
+  INGEST_FUNCTION,
   SUPABASE_ANON_KEY,
   SUPABASE_URL,
   TELEMETRY_CONFIGURED,
-  TELEMETRY_TABLE,
 } from '../config';
+
+/** O banco corta em 80; cortar aqui evita que um lote inteiro seja rejeitado. */
+const DECK_MAX = 80;
 
 /** Acima disso a fila para de crescer — descarta o mais antigo. */
 export const QUEUE_LIMIT = 500;
@@ -63,8 +66,8 @@ export function toEvent(match: Match, installId: string): TelemetryEvent {
     event_id: Crypto.randomUUID(),
     format: match.format,
     archetype: match.archetype,
-    my_deck: match.myDeck,
-    opp_deck: match.oppDeck,
+    my_deck: (match.myDeck ?? '').slice(0, DECK_MAX),
+    opp_deck: (match.oppDeck ?? '').slice(0, DECK_MAX),
     on_play: match.onPlay,
     won: match.won,
     drew: match.drew === true,
@@ -85,8 +88,10 @@ export interface FlushResult {
  * Envia a fila em lotes. Falha de rede não perde dado: o que não foi aceito
  * volta em `remaining` e tenta de novo na próxima chamada.
  *
- * `Prefer: resolution=ignore-duplicates` faz o Postgres ignorar `event_id`
- * repetido, então reenviar um lote que na verdade chegou não duplica nada.
+ * O destino é a função `ingest_matches`, não a tabela. Ela faz
+ * `on conflict do nothing`, então reenviar um lote que na verdade chegou é
+ * inofensivo — e a chave pública nunca precisa de permissão de escrita direta.
+ * Ver o comentário longo em supabase/schema.sql.
  */
 export async function flushQueue(queue: TelemetryEvent[]): Promise<FlushResult> {
   if (!TELEMETRY_CONFIGURED) {
@@ -94,7 +99,7 @@ export async function flushQueue(queue: TelemetryEvent[]): Promise<FlushResult> 
   }
   if (queue.length === 0) return { sent: 0, remaining: [] };
 
-  const endpoint = `${SUPABASE_URL}/rest/v1/${TELEMETRY_TABLE}`;
+  const endpoint = `${SUPABASE_URL}/rest/v1/rpc/${INGEST_FUNCTION}`;
   let sent = 0;
 
   for (let i = 0; i < queue.length; i += BATCH_SIZE) {
@@ -106,9 +111,9 @@ export async function flushQueue(queue: TelemetryEvent[]): Promise<FlushResult> 
           'Content-Type': 'application/json',
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          Prefer: 'return=minimal,resolution=ignore-duplicates',
+          Prefer: 'return=minimal',
         },
-        body: JSON.stringify(batch),
+        body: JSON.stringify({ events: batch }),
       });
 
       if (!res.ok) {

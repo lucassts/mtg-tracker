@@ -9,6 +9,7 @@ import { Match } from '../types';
 import { Icon } from '../components/Icon';
 import { MatchForm } from '../components/MatchForm';
 import { useStore } from '../store/useStore';
+import { useRecentDecks } from '../store/selectors';
 import { useT } from '../i18n/useT';
 
 function groupByDate(matches: Match[], locale: string) {
@@ -28,7 +29,7 @@ export function HistoryScreen() {
   const h = t.history;
   const matches = useStore(s => s.matches);
   const settings = useStore(s => s.settings);
-  const recentDecks = useStore(s => s.getRecentDecks());
+  const recentDecks = useRecentDecks();
   const updateMatch = useStore(s => s.updateMatch);
   const [editMatch, setEditMatch] = React.useState<Match | null>(null);
 

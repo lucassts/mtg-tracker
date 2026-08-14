@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useKeepAwake } from 'expo-keep-awake';
+import { useScreenAwake } from '../hooks/useScreenAwake';
 import { colors } from '../theme/colors';
 import { PlayerCell } from '../components/PlayerCell';
 import { CountersModal, emptyCounters, emptyMana } from '../components/CountersModal';
@@ -29,8 +29,7 @@ interface Player {
 
 export function LifeScreen() {
   const insets = useSafeAreaInsets();
-  // Partida de Commander passa de uma hora; a tela não pode dormir no meio.
-  useKeepAwake();
+  useScreenAwake();
   const t = useT();
   const lf = t.life;
   const settings = useStore(s => s.settings);

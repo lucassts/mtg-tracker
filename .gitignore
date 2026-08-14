@@ -53,3 +53,7 @@ coverage/
 
 # Nota de trabalho local, com caminhos absolutos da máquina do autor
 SESSAO.md
+
+# Saida do build web (gerada por `expo export --platform web`)
+dist/
+.vercel/

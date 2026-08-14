@@ -1,5 +1,14 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+/**
+ * Tinta de fundo das zonas de toque. Fica forte na borda externa — onde o
+ * polegar cai — e some antes de chegar no número, para não competir com ele.
+ */
+const MINUS_TINT = ['rgba(192,66,42,0.30)', 'rgba(192,66,42,0.06)', 'transparent'] as const;
+const PLUS_TINT = ['rgba(45,138,94,0.30)', 'rgba(45,138,94,0.06)', 'transparent'] as const;
+const TINT_STOPS = [0, 0.55, 1] as const;
 
 interface Player {
   id: number;
@@ -87,6 +96,14 @@ export function PlayerCell({ player, onAdjust }: PlayerCellProps) {
         delayLongPress={10000}
         style={styles.leftZone}
       >
+        <LinearGradient
+          colors={MINUS_TINT}
+          locations={TINT_STOPS}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <Text style={styles.zoneLabel}>−</Text>
       </Pressable>
 
@@ -97,6 +114,14 @@ export function PlayerCell({ player, onAdjust }: PlayerCellProps) {
         delayLongPress={10000}
         style={styles.rightZone}
       >
+        <LinearGradient
+          colors={PLUS_TINT}
+          locations={TINT_STOPS}
+          start={{ x: 1, y: 0.5 }}
+          end={{ x: 0, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <Text style={styles.zoneLabel}>+</Text>
       </Pressable>
 

@@ -6,6 +6,7 @@ import { Badge } from '../components/Badge';
 import { Icon } from '../components/Icon';
 import { MatchForm } from '../components/MatchForm';
 import { useStore } from '../store/useStore';
+import { useRecentDecks } from '../store/selectors';
 import { useT } from '../i18n/useT';
 
 export function ReviewScreen() {
@@ -13,7 +14,7 @@ export function ReviewScreen() {
   const t = useT();
   const r = t.review;
   const settings = useStore(s => s.settings);
-  const recentDecks = useStore(s => s.getRecentDecks());
+  const recentDecks = useRecentDecks();
   const addMatch = useStore(s => s.addMatch);
   const pendingReview = useStore(s => s.pendingReview);
   const setPendingReview = useStore(s => s.setPendingReview);
