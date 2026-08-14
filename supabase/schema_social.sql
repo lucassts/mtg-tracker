@@ -8,10 +8,7 @@
 --   · a chave pública não lê nem escreve tabela direta: só chama função.
 
 -- pg_trgm: semelhança de nome, usada para deduplicar locais.
--- pgcrypto: `gen_random_bytes`, usada para sortear o código do convite.
---   `gen_random_uuid` é nativa desde o Postgres 13, `gen_random_bytes` não.
 create extension if not exists pg_trgm;
-create extension if not exists pgcrypto;
 
 -- ─── Jogadores ──────────────────────────────────────────────
 -- Uma linha por conta anônima. `display_name` é o apelido que a pessoa escolhe
@@ -194,9 +191,12 @@ declare
 begin
   perform public.ensure_player();
 
-  -- 8 caracteres de base32 sem vogais: ~1e12 combinações, sem formar palavra.
-  new_code := upper(substr(translate(encode(gen_random_bytes(8), 'base64'),
-                                     'AEIOUaeiou+/=', 'BCDFGbcdfg'), 1, 8));
+  -- 12 hexadecimais de um uuid sorteado: ~2,8e14 combinações.
+  --
+  -- Sortear com `gen_random_bytes` seria mais direto, mas ela vem do pgcrypto,
+  -- que no Supabase é instalado no schema `extensions` — fora do `search_path`
+  -- fixo desta função. `gen_random_uuid` é nativa e resolve sem depender disso.
+  new_code := upper(replace(substr(gen_random_uuid()::text, 1, 13), '-', ''));
 
   insert into public.invites (code, inviter_id, expires_at)
   values (new_code, auth.uid(), now() + interval '24 hours');
