@@ -99,7 +99,7 @@ design_handoff/          protótipo HTML que originou o design
 
 ## Stack
 
-React Native 0.81 · Expo SDK 54 · TypeScript · Zustand · React Navigation 6 · react-native-svg · llama.rn · Jest
+React Native 0.81 · Expo SDK 54 · Supabase · TypeScript · Zustand · React Navigation 6 · react-native-svg · llama.rn · Jest
 
 ## Licença
 
