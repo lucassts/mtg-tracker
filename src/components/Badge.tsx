@@ -13,7 +13,13 @@ export function Badge({ label, dot = true, dotColor = colors.good, style }: Badg
   return (
     <View style={[styles.badge, style]}>
       {dot && <View style={[styles.dot, { backgroundColor: dotColor }]} />}
-      <Text style={styles.label}>{label}</Text>
+      {/*
+        Maiúsculas em JS, e não por `textTransform`: o Android mede o texto
+        antes de aplicar a transformação, então a versão maiúscula transborda
+        a largura calculada e o fim da frase some. Aqui a medição já vê o
+        texto final.
+      */}
+      <Text style={styles.label}>{label.toUpperCase()}</Text>
     </View>
   );
 }
@@ -22,6 +28,8 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    // Sem isto o badge estica com o container e o "pill" vira uma barra.
+    alignSelf: 'flex-start',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -39,7 +47,9 @@ const styles = StyleSheet.create({
     fontFamily: 'JetBrainsMono',
     fontSize: 9.5,
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    // O espaçamento entre letras sobra depois do último caractere; sem esta
+    // folga o Android come o final da frase.
+    paddingRight: 1,
     color: colors.ink2,
   },
 });
