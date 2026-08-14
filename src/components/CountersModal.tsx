@@ -431,6 +431,7 @@ export function CountersModal({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.tabsBar}
             contentContainerStyle={styles.tabs}
           >
             {players.map((p, i) => (
@@ -581,7 +582,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
 
-  tabs: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
+  /**
+   * Altura travada: uma ScrollView horizontal dentro de um container em coluna
+   * cresce no eixo vertical e empurra o pager para baixo — o que abria um vão
+   * enorme entre as abas e o bloco de mana. 44 do círculo + 12 de folga em cima
+   * e embaixo.
+   */
+  tabsBar: { flexGrow: 0, height: 68 },
+  tabs: { paddingHorizontal: 20, paddingVertical: 12, gap: 10, alignItems: 'center' },
   // Círculo do mesmo diâmetro dos pips de mana — não uma pílula alongada.
   tab: {
     width: 44,
