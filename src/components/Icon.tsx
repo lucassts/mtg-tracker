@@ -148,6 +148,12 @@ export function Icon({ name, size = 20, stroke = 'currentColor', strokeWidth = 1
         <Path d="M18 14.4A6 6 0 0 1 21 20" {...props} />
       </>
     ),
+    pin: (
+      <>
+        <Path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" {...props} />
+        <Circle cx="12" cy="10" r="2.6" {...props} />
+      </>
+    ),
     coffee: (
       <>
         <Path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" {...props} />

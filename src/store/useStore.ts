@@ -4,9 +4,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Match, Settings, PendingReview, TelemetryEvent, Deck, DeckVersion, Format, Archetype,
   CounterPrefs, CustomCounter, DEFAULT_COUNTER_PREFS,
+  Opponent, Venue, SocialSettings, DEFAULT_SOCIAL,
 } from '../types';
 import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
+import { claimPayload, submitClaim } from '../services/social';
 import { getArchetypeForDeck } from '../data/decks';
 
 /** Contador local para ids: `Date.now()` colide quando dois somem no mesmo ms. */
@@ -21,6 +23,9 @@ interface AppState {
   telemetryQueue: TelemetryEvent[];
   decks: Deck[];
   deckVersions: DeckVersion[];
+  opponents: Opponent[];
+  /** Locais já usados neste aparelho, inclusive os do tipo casa. */
+  venues: Venue[];
 
   // Actions
   addMatch: (match: Omit<Match, 'id' | 'date'>) => void;
@@ -42,6 +47,22 @@ interface AppState {
   /** Versão atual de um deck pelo nome — usada ao salvar a partida. */
   getCurrentVersionLabel: (deckName: string) => string | undefined;
 
+  // Oponentes
+  addOpponent: (nickname: string) => Opponent | null;
+  updateOpponent: (id: string, patch: Partial<Omit<Opponent, 'id' | 'createdAt'>>) => void;
+  deleteOpponent: (id: string) => void;
+
+  // Locais
+  addVenue: (venue: Venue) => Venue;
+  deleteVenue: (id: string) => void;
+
+  // Parte social
+  setSocial: (partial: Partial<SocialSettings>) => void;
+  /** Anota o resultado da confirmação na partida local. */
+  setClaim: (matchId: string, claimId: string, status: NonNullable<Match['claimStatus']>) => void;
+  /** Envia a partida para o oponente vinculado confirmar. Silencioso ao falhar. */
+  claimMatch: (match: Match) => Promise<void>;
+
   // Contadores
   setCounterPref: (key: keyof Omit<CounterPrefs, 'custom'>, on: boolean) => void;
   addCustomCounter: (name: string) => CustomCounter | null;
@@ -62,6 +83,7 @@ const defaultSettings: Settings = {
   deckRenames: {},
   installId: '',
   counterPrefs: DEFAULT_COUNTER_PREFS,
+  social: DEFAULT_SOCIAL,
 };
 
 export const useStore = create<AppState>()(
@@ -76,6 +98,8 @@ export const useStore = create<AppState>()(
       telemetryQueue: [],
       decks: [],
       deckVersions: [],
+      opponents: [],
+      venues: [],
 
       addMatch: (matchData) => {
         const match: Match = {
@@ -108,6 +132,29 @@ export const useStore = create<AppState>()(
 
         // Não bloqueia a UI; se falhar, fica na fila para a próxima vez.
         void get().flushTelemetry();
+        void get().claimMatch(match);
+      },
+
+      /**
+       * Se o oponente é uma conta vinculada, registra a partida para ele
+       * confirmar. Sem vínculo, não há o que confirmar e a partida segue como
+       * as outras: local e, se o compartilhamento estiver ligado, anônima.
+       */
+      claimMatch: async (match) => {
+        const { settings, opponents } = get();
+        if (!settings.social.enabled || !match.opponentId) return;
+
+        const opponent = opponents.find(o => o.id === match.opponentId);
+        if (opponent?.linkState !== 'linked' || !opponent.playerId) return;
+
+        try {
+          const payload = claimPayload(match, settings.installId, match.venueId);
+          const claimId = await submitClaim(opponent.playerId, payload);
+          get().setClaim(match.id, claimId, 'pending');
+        } catch (e) {
+          // Falhar aqui não pode perder a partida: ela já está salva.
+          console.warn('[store] não foi possível registrar a confirmação:', e);
+        }
       },
 
       updateMatch: (updated) => {
@@ -117,8 +164,11 @@ export const useStore = create<AppState>()(
       },
 
       deleteAllData: () => {
-        // Apagar tudo apaga também os decks e o que ainda não foi enviado.
-        set({ matches: [], telemetryQueue: [], decks: [], deckVersions: [] });
+        // Apagar tudo apaga decks, oponentes, locais e o que não foi enviado.
+        set({
+          matches: [], telemetryQueue: [], decks: [], deckVersions: [],
+          opponents: [], venues: [],
+        });
       },
 
       updateSettings: (partial) => {
@@ -275,6 +325,84 @@ export const useStore = create<AppState>()(
         return deckVersions.find(v => v.id === deck.currentVersionId)?.label;
       },
 
+      // ── Oponentes ──────────────────────────────────────────
+
+      addOpponent: (nickname) => {
+        const trimmed = nickname.trim().slice(0, 40);
+        if (!trimmed) return null;
+
+        const existing = get().opponents.find(
+          o => o.nickname.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (existing) return existing;
+
+        const opponent: Opponent = {
+          id: newId('o'),
+          nickname: trimmed,
+          linkState: 'local',
+          createdAt: new Date().toISOString(),
+        };
+        set(state => ({ opponents: [...state.opponents, opponent] }));
+        return opponent;
+      },
+
+      updateOpponent: (id, patch) => {
+        set(state => ({
+          opponents: state.opponents.map(o =>
+            o.id === id
+              ? { ...o, ...patch, nickname: patch.nickname?.trim().slice(0, 40) || o.nickname }
+              : o
+          ),
+        }));
+      },
+
+      deleteOpponent: (id) => {
+        // As partidas jogadas contra ele continuam no histórico, com o nome
+        // que ficou gravado na partida. Excluir o contato não apaga o passado.
+        set(state => ({ opponents: state.opponents.filter(o => o.id !== id) }));
+      },
+
+      // ── Locais ─────────────────────────────────────────────
+
+      addVenue: (venue) => {
+        const existing = get().venues.find(v => v.id === venue.id);
+        if (existing) return existing;
+        set(state => ({ venues: [...state.venues, venue] }));
+        return venue;
+      },
+
+      deleteVenue: (id) => {
+        set(state => ({ venues: state.venues.filter(v => v.id !== id) }));
+      },
+
+      // ── Parte social ───────────────────────────────────────
+
+      setSocial: (partial) => {
+        set(state => {
+          const social = { ...state.settings.social, ...partial };
+          // Desligar corta o vínculo remoto de todos: sem conta, não há como
+          // confirmar nada. Os apelidos ficam, viram oponentes locais.
+          const opponents = partial.enabled === false
+            ? state.opponents.map(o => ({
+                ...o,
+                linkState: 'local' as const,
+                playerId: undefined,
+                inviteCode: undefined,
+              }))
+            : state.opponents;
+
+          return { settings: { ...state.settings, social }, opponents };
+        });
+      },
+
+      setClaim: (matchId, claimId, status) => {
+        set(state => ({
+          matches: state.matches.map(m =>
+            m.id === matchId ? { ...m, claimId, claimStatus: status } : m
+          ),
+        }));
+      },
+
       // ── Preferências de contadores ─────────────────────────
 
       setCounterPref: (key, on) => {
@@ -366,7 +494,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mtg-tracker-storage',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         matches: state.matches,
@@ -374,6 +502,8 @@ export const useStore = create<AppState>()(
         telemetryQueue: state.telemetryQueue,
         decks: state.decks,
         deckVersions: state.deckVersions,
+        opponents: state.opponents,
+        venues: state.venues,
       }),
       migrate: (persisted, version) => {
         const state = persisted as Partial<AppState>;
@@ -413,6 +543,16 @@ export const useStore = create<AppState>()(
         // v2 → v3: preferências de contadores passam a existir.
         if (version < 3 && state.settings && !state.settings.counterPrefs) {
           state.settings = { ...state.settings, counterPrefs: DEFAULT_COUNTER_PREFS };
+        }
+
+        // v3 → v4: oponentes e locais. Nascem vazios e a parte social
+        // desligada — ninguém ganha conta por atualizar o app.
+        if (version < 4) {
+          state.opponents = state.opponents ?? [];
+          state.venues = state.venues ?? [];
+          if (state.settings && !state.settings.social) {
+            state.settings = { ...state.settings, social: DEFAULT_SOCIAL };
+          }
         }
 
         return state as AppState;

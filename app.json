@@ -3,6 +3,7 @@
     "name": "MTG Tracker",
     "slug": "mtg-tracker",
     "version": "1.0.0",
+    "scheme": "mtgtracker",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

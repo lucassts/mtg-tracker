@@ -16,6 +16,62 @@ export interface Match {
    * histórico, que é o ponto de comparar versões entre si.
    */
   deckVersion?: string;
+
+  /** Contra quem foi. Referência local; o nome vai em `opponentName`. */
+  opponentId?: string;
+  opponentName?: string;
+
+  /** Onde foi. `venueName` é cópia, para o histórico não depender do cadastro. */
+  venueId?: string;
+  venueName?: string;
+
+  /**
+   * Estado da confirmação pelo oponente.
+   * Ausente = partida sem oponente vinculado, que não passa por confirmação.
+   */
+  claimStatus?: 'pending' | 'confirmed' | 'disputed';
+  claimId?: string;
+}
+
+// ─── Oponentes ──────────────────────────────────────────────
+
+/**
+ * `local`    — só um apelido neste aparelho, ninguém do outro lado.
+ * `invited`  — você gerou um convite e ninguém aceitou ainda.
+ * `linked`   — a outra pessoa aceitou; dá para confirmar partidas.
+ */
+export type OpponentLink = 'local' | 'invited' | 'linked';
+
+export interface Opponent {
+  id: string;
+  /** Apelido que VOCÊ deu. Não é o nome que a pessoa escolheu para si. */
+  nickname: string;
+  linkState: OpponentLink;
+  /** Conta remota, quando vinculado. */
+  playerId?: string;
+  /** Como a pessoa se chama do lado dela. Só existe depois do vínculo. */
+  remoteName?: string;
+  /** Código do convite em aberto, para reexibir o QR. */
+  inviteCode?: string;
+  favorite?: boolean;
+  createdAt: string;
+}
+
+// ─── Locais ─────────────────────────────────────────────────
+
+export type VenueKind = 'loja' | 'evento' | 'casa' | 'online';
+
+export interface Venue {
+  id: string;
+  name: string;
+  kind: VenueKind;
+  city?: string;
+  country?: string;
+  /**
+   * Local do tipo `casa` nunca vai para a base compartilhada — é endereço
+   * residencial de alguém. Fica só neste aparelho.
+   */
+  localOnly?: boolean;
 }
 
 // ─── Decks e versões ────────────────────────────────────────
@@ -55,7 +111,26 @@ export interface Settings {
   installId: string;
   /** O que a aba de contadores mostra. */
   counterPrefs: CounterPrefs;
+  /** Parte social: conta anônima, oponentes vinculados, locais compartilhados. */
+  social: SocialSettings;
 }
+
+export interface SocialSettings {
+  /** Desligado por padrão. É o único lugar que cria conta. */
+  enabled: boolean;
+  /** Id da conta anônima, quando ligada. */
+  playerId?: string;
+  /** Apelido que você escolhe para si; é o que o oponente vê. */
+  displayName: string;
+  /** Cidade padrão nas buscas de local. Fica no aparelho, não é enviada. */
+  homeCity: string;
+}
+
+export const DEFAULT_SOCIAL: SocialSettings = {
+  enabled: false,
+  displayName: '',
+  homeCity: '',
+};
 
 export interface Filters {
   format: string;     // 'All' | format name

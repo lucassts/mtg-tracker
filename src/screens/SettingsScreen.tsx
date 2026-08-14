@@ -19,6 +19,8 @@ import { useT } from '../i18n/useT';
 import { TELEMETRY_CONFIGURED } from '../config';
 import { DecksScreen } from './DecksScreen';
 import { CountersSettingsScreen } from './CountersSettingsScreen';
+import { OpponentsScreen } from './OpponentsScreen';
+import { ClaimsScreen } from './ClaimsScreen';
 
 /** Página de doações do autor. */
 const KOFI_URL = 'https://ko-fi.com/cathar1no';
@@ -69,6 +71,9 @@ export function SettingsScreen() {
 
   const [showDecks, setShowDecks] = React.useState(false);
   const [showCounters, setShowCounters] = React.useState(false);
+  const [showOpponents, setShowOpponents] = React.useState(false);
+  const [showClaims, setShowClaims] = React.useState(false);
+  const socialOn = useStore(st => st.settings.social.enabled);
   const [importStatus, setImportStatus] = React.useState<null | 'ok' | 'err'>(null);
   const [importCount, setImportCount] = React.useState(0);
 
@@ -124,6 +129,8 @@ export function SettingsScreen() {
 
   if (showDecks) return <DecksScreen onBack={() => setShowDecks(false)} />;
   if (showCounters) return <CountersSettingsScreen onBack={() => setShowCounters(false)} />;
+  if (showOpponents) return <OpponentsScreen onBack={() => setShowOpponents(false)} />;
+  if (showClaims) return <ClaimsScreen onBack={() => setShowClaims(false)} />;
 
   const currentLang = settings.language || 'pt-BR';
 
@@ -270,6 +277,28 @@ export function SettingsScreen() {
             </View>
             <Icon name="chev" size={14} stroke={colors.ink4} />
           </Row>
+          <View style={styles.rowDivider} />
+          <Row onPress={() => setShowOpponents(true)}>
+            <Icon name="users" size={18} stroke={colors.ink3} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>{s.opponents}</Text>
+              <Text style={styles.rowSub}>{s.opponentsSub}</Text>
+            </View>
+            <Icon name="chev" size={14} stroke={colors.ink4} />
+          </Row>
+          {socialOn && (
+            <>
+              <View style={styles.rowDivider} />
+              <Row onPress={() => setShowClaims(true)}>
+                <Icon name="check" size={18} stroke={colors.ink3} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{s.claims}</Text>
+                  <Text style={styles.rowSub}>{s.claimsSub}</Text>
+                </View>
+                <Icon name="chev" size={14} stroke={colors.ink4} />
+              </Row>
+            </>
+          )}
           {matches.length === 0 && (
             <>
               <View style={styles.rowDivider} />

@@ -6,8 +6,11 @@ import { SegmentedControl } from './SegmentedControl';
 import { DeckSelector } from './DeckSelector';
 import { Icon } from './Icon';
 import { DatePickerModal } from './DatePickerModal';
+import { OpponentPicker } from './OpponentPicker';
+import { VenuePicker } from './VenuePicker';
 import { useT } from '../i18n/useT';
 import { getArchetypeForDeck } from '../data/decks';
+import { useStore } from '../store/useStore';
 
 interface MatchFormProps {
   initial?: Partial<Match>;
@@ -84,6 +87,9 @@ export function MatchForm({
   const [showDatePicker, setShowDatePicker] = React.useState(false);
 
   const set = (k: keyof Match, v: any) => setMatch(m => ({ ...m, [k]: v }));
+
+  const venues = useStore(s => s.venues);
+  const selectedVenue = venues.find(v => v.id === match.venueId);
 
   // Auto-preenche arquétipo a partir da database quando oppDeck muda
   React.useEffect(() => {
@@ -173,6 +179,31 @@ export function MatchForm({
             format={match.format as any}
             recentDecks={recentDecks}
             placeholder={mf.oppDeckPlaceholder}
+          />
+        </Field>
+
+        {/* Quem era o oponente */}
+        <Field label={mf.opponent} conf={conf}>
+          <OpponentPicker
+            valueId={match.opponentId}
+            valueName={match.opponentName}
+            onChange={(id, name) => {
+              setMatch(m => ({ ...m, opponentId: id, opponentName: name }));
+            }}
+          />
+        </Field>
+
+        {/* Onde foi */}
+        <Field label={mf.venue} conf={conf}>
+          <VenuePicker
+            value={selectedVenue}
+            onChange={venue => {
+              setMatch(m => ({
+                ...m,
+                venueId: venue?.id,
+                venueName: venue?.name,
+              }));
+            }}
           />
         </Field>
 

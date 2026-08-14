@@ -265,6 +265,38 @@ end;
 $$;
 
 /**
+ * Diz se um convite já foi aceito e por quem.
+ *
+ * Existe porque quem convida não é avisado: o resgate acontece no aparelho da
+ * outra pessoa. Sem isto, o convite ficaria "aguardando" para sempre no lado
+ * de quem mandou, e ele nunca conseguiria registrar partida contra o vínculo
+ * que já existe.
+ *
+ * Só o autor do convite consegue consultar — senão daria para varrer códigos.
+ */
+create or replace function public.invite_status(p_code text)
+returns table (used boolean, player_id uuid, player_name text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.invites;
+begin
+  select * into inv from public.invites where code = upper(trim(p_code));
+
+  if inv is null then raise exception 'convite não encontrado'; end if;
+  if inv.inviter_id <> auth.uid() then raise exception 'este convite não é seu'; end if;
+
+  return query
+    select
+      inv.used_at is not null,
+      inv.used_by,
+      coalesce((select p.display_name from public.players p where p.id = inv.used_by), '');
+end;
+$$;
+
+/**
  * Registra uma partida para o oponente confirmar.
  * Só vale entre jogadores já vinculados.
  */
@@ -442,6 +474,7 @@ grant execute on function public.venue_key(text) to anon, authenticated;
 revoke all on function public.ensure_player(text)  from public;
 revoke all on function public.create_invite()       from public;
 revoke all on function public.redeem_invite(text)   from public;
+revoke all on function public.invite_status(text)   from public;
 revoke all on function public.submit_claim(uuid, jsonb) from public;
 revoke all on function public.resolve_claim(uuid, boolean) from public;
 revoke all on function public.search_venues(text, text, int) from public;
@@ -450,6 +483,7 @@ revoke all on function public.create_venue(text, text, text, text) from public;
 grant execute on function public.ensure_player(text)  to authenticated;
 grant execute on function public.create_invite()       to authenticated;
 grant execute on function public.redeem_invite(text)   to authenticated;
+grant execute on function public.invite_status(text)   to authenticated;
 grant execute on function public.submit_claim(uuid, jsonb) to authenticated;
 grant execute on function public.resolve_claim(uuid, boolean) to authenticated;
 grant execute on function public.search_venues(text, text, int) to authenticated;

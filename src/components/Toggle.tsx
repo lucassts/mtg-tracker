@@ -5,9 +5,11 @@ import { colors } from '../theme/colors';
 interface ToggleProps {
   value: boolean;
   onValueChange: (v: boolean) => void;
+  /** Some do alcance do toque e fica apagado — usado quando não há servidor. */
+  disabled?: boolean;
 }
 
-export function Toggle({ value, onValueChange }: ToggleProps) {
+export function Toggle({ value, onValueChange, disabled }: ToggleProps) {
   const anim = React.useRef(new Animated.Value(value ? 1 : 0)).current;
 
   React.useEffect(() => {
@@ -25,7 +27,11 @@ export function Toggle({ value, onValueChange }: ToggleProps) {
   });
 
   return (
-    <Pressable onPress={() => onValueChange(!value)} style={styles.track}>
+    <Pressable
+      onPress={() => onValueChange(!value)}
+      disabled={disabled}
+      style={[styles.track, disabled && styles.disabled]}
+    >
       <Animated.View style={[styles.track, { backgroundColor: bgColor, padding: 0 }]}>
         <Animated.View style={[styles.thumb, { transform: [{ translateX }] }]} />
       </Animated.View>
@@ -40,6 +46,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     justifyContent: 'center',
   },
+  disabled: { opacity: 0.35 },
   thumb: {
     position: 'absolute',
     width: 22,
