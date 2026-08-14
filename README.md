@@ -18,7 +18,9 @@ Traz também um contador de vida para 2 a 6 jogadores, com contadores de storm, 
 | **Revisão** | Confere o que o modelo extraiu, com marca de confiança por campo, antes de salvar |
 | **Stats** | Win rate, evolução, on the play vs on the draw, desempenho por deck e por arquétipo do oponente |
 | **Partidas** | Histórico agrupado por data, com edição |
-| **Configurações** | Padrões, idioma, privacidade, importar/exportar CSV, renomear decks |
+| **Configurações** | Padrões, idioma, privacidade, decks, contadores, oponentes, CSV |
+
+Registrar quem foi o oponente e onde a partida aconteceu é opcional e funciona sem conta. Vincular a conta do oponente — por QR ou link — permite que ele **confirme o resultado**, e só partida confirmada entra na base de meta como verificada. O desenho e o porquê estão em [docs/rfc-001](docs/rfc-001-oponentes-locais-e-partidas-verificadas.md).
 
 Interface em português, inglês e japonês.
 
@@ -63,7 +65,8 @@ npm run deps:check # confere versões contra a SDK do Expo
 Sem as variáveis abaixo o app funciona normalmente e a telemetria vira no-op.
 
 1. Crie um projeto no [Supabase](https://supabase.com).
-2. Rode [`supabase/schema.sql`](supabase/schema.sql) no SQL Editor. Ele cria a tabela, liga RLS e libera **apenas inserção** para a chave `anon`.
+2. Rode [`supabase/schema.sql`](supabase/schema.sql) no SQL Editor. Ele cria a tabela, liga RLS e libera a entrada **apenas por função** — a chave pública não escreve na tabela direto.
+   Para oponentes, locais e partidas verificadas, rode também [`supabase/schema_social.sql`](supabase/schema_social.sql) e habilite *Allow anonymous sign-ins* em Authentication → Sign In / Providers.
 3. Copie `.env.example` para `.env` e preencha:
 
 ```

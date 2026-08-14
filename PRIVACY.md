@@ -2,9 +2,9 @@
 
 Este documento descreve exatamente o que o MTG Tracker faz com dados. Ele vale para o código deste repositório; um build de terceiro pode ter sido alterado.
 
-## Duas coisas diferentes
+## Três coisas diferentes
 
-O app faz duas afirmações sobre privacidade que costumam ser confundidas. Elas são independentes.
+O app faz afirmações sobre privacidade que costumam ser confundidas. Elas são independentes.
 
 ### 1. A inferência é local, sem exceção
 
@@ -54,6 +54,39 @@ Apagar os dados do app (Configurações → Apagar tudo, ou desinstalar) descart
 Eventos são acumulados localmente e enviados em lote quando há conexão. Isso significa que pode existir, por um tempo, algo pendente no aparelho.
 
 Desligar o compartilhamento **descarta a fila imediatamente**, sem tentar enviá-la antes. Configurações mostra quantos eventos estão pendentes enquanto o compartilhamento está ligado.
+
+### 3. Parte social — desligada por padrão
+
+Oponentes, locais compartilhados e confirmação de partida exigem uma **conta anônima**. Ela é criada só quando você liga a chave em Configurações → Oponentes. Sem ligar, nada disso existe e o app funciona inteiro: dá para anotar oponente por apelido e local do tipo casa sem servidor nenhum.
+
+A conta é anônima de verdade: **sem e-mail, sem senha, sem nome real**. O que ela dá é um identificador estável — o mínimo para o aparelho do seu oponente conseguir confirmar uma partida sua.
+
+#### O que a conta guarda no servidor
+
+| Guarda | Não guarda |
+|---|---|
+| um id de conta | e-mail, telefone, senha |
+| o apelido que **você** escolheu para si | seu nome real |
+| com quem você está vinculado | sua agenda, contatos ou redes |
+| partidas aguardando confirmação | localização |
+
+#### Confirmação de partida
+
+Ao salvar uma partida contra um oponente **vinculado**, o app manda para ele o mesmo evento anônimo de sempre, mais o id do local. Ele confirma ou contesta.
+
+Quando ele confirma, a partida entra na base de meta marcada como **verificada** — e os ids dos dois jogadores **ficam para trás**. A base analítica registra que a partida foi verificada, nunca por quem. Isso está no `resolve_claim` em [`supabase/schema_social.sql`](supabase/schema_social.sql), não na política.
+
+Contestada, ou sem resposta, ela fica só no seu aparelho.
+
+#### Locais
+
+Loja, evento e online vão para uma base compartilhada, para que a próxima pessoa ache em vez de criar de novo. **Local do tipo "casa" nunca sai do aparelho** — é endereço residencial de alguém. Isso é garantido por constraint no banco, não só pelo app: um cliente com defeito também não consegue.
+
+Não há rastreamento de localização. A cidade que você digita serve para ordenar a busca de locais e fica no aparelho.
+
+#### Desligar
+
+Desligar a parte social encerra a sessão e transforma todos os oponentes vinculados em oponentes locais. O histórico continua intacto.
 
 ## Como os dados ficam armazenados
 
