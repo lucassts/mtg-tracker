@@ -67,6 +67,8 @@ export const translations = {
     history: {
       title: 'Partidas',
       total: (n: number) => `${n} no total`,
+      syncSkipped: (s: number) => `sincronizado agora; aguarde ${s}s`,
+      syncError: 'não foi possível sincronizar',
       vs: 'vs',
       play: 'Começa',
       draw: 'Saca',
@@ -582,6 +584,8 @@ export const translations = {
     history: {
       title: 'Matches',
       total: (n: number) => `${n} total`,
+      syncSkipped: (s: number) => `just synced; wait ${s}s`,
+      syncError: 'could not sync',
       vs: 'vs',
       play: 'Play',
       draw: 'Draw',
@@ -1084,6 +1088,8 @@ export const translations = {
     history: {
       title: '対戦履歴',
       total: (n: number) => `合計 ${n} 戦`,
+      syncSkipped: (s: number) => `同期したばかりです。あと${s}秒`,
+      syncError: '同期できませんでした',
       vs: 'vs',
       play: '先攻',
       draw: '後攻',

@@ -13,6 +13,7 @@ import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { useStore } from './src/store/useStore';
 import { colors } from './src/theme/colors';
 import { fontAssets } from './src/theme/typography';
+import { AUTO_INTERVAL_MS } from './src/utils/syncThrottle';
 
 // Segura a splash até as fontes entrarem, senão a primeira tela pisca na fonte
 // do sistema e reflui.
@@ -41,7 +42,11 @@ function AppRoot() {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') rodar();
     });
-    return () => sub.remove();
+    // E de meia em meia hora com o app aberto, para quem passa a tarde no
+    // torneio sem fechar o app. O intervalo minimo de um minuto continua
+    // valendo: se algo ja sincronizou agora, isto nao repete.
+    const relogio = setInterval(rodar, AUTO_INTERVAL_MS);
+    return () => { sub.remove(); clearInterval(relogio); };
   }, [flushTelemetry, syncMatches]);
 
   // Falha ao carregar fonte não impede o app de abrir: o texto sai na fonte do

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet,
+  View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useStore } from '../store/useStore';
 import { useRecentDecks } from '../store/selectors';
 import { useT } from '../i18n/useT';
 import { useTabReset } from '../hooks/useTabReset';
+import { secondsUntilNext } from '../utils/syncThrottle';
 
 function groupByDate(matches: Match[], locale: string) {
   const g: Record<string, Match[]> = {};
@@ -36,6 +37,31 @@ export function HistoryScreen() {
 
   // Tocar em "Partidas" fecha a edição aberta e volta para a lista.
   useTabReset(React.useCallback(() => setEditMatch(null), []));
+
+  const socialOn = useStore(s => s.settings.social.enabled);
+  const syncStatus = useStore(s => s.syncStatus);
+  const syncMatches = useStore(s => s.syncMatches);
+  const [syncing, setSyncing] = React.useState(false);
+  const [aviso, setAviso] = React.useState<string | null>(null);
+
+  /**
+   * Atualizar à mão. Respeita o mesmo intervalo de um minuto do resto: apertar
+   * dez vezes seguidas não vira dez idas ao servidor, e o aviso explica por
+   * que nada aconteceu em vez de deixar a pessoa achando que travou.
+   */
+  const atualizar = () => {
+    setSyncing(true);
+    setAviso(null);
+    void syncMatches().then(resultado => {
+      if (resultado === 'skipped') {
+        const faltam = secondsUntilNext(syncStatus?.at, Date.now());
+        setAviso(h.syncSkipped(faltam));
+      } else if (resultado === 'error') {
+        setAviso(h.syncError);
+      }
+      setTimeout(() => setAviso(null), 4000);
+    }).finally(() => setSyncing(false));
+  };
 
   const locale = settings.language === 'ja-JP' ? 'ja-JP' : settings.language === 'en-US' ? 'en-US' : 'pt-BR';
   const grouped = React.useMemo(() => groupByDate(matches, locale), [matches, locale]);
@@ -72,9 +98,23 @@ export function HistoryScreen() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
-      <View>
-        <Text style={styles.pageTitle}>{h.title}</Text>
-        <Text style={styles.subtitle}>{h.total(matches.length)}</Text>
+      <View style={styles.titleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pageTitle}>{h.title}</Text>
+          <Text style={styles.subtitle}>
+            {h.total(matches.length)}
+            {aviso ? ` · ${aviso}` : ''}
+          </Text>
+        </View>
+
+        {/* Só aparece com conta: sem ela não há servidor com que falar. */}
+        {socialOn && (
+          <Pressable onPress={atualizar} disabled={syncing} style={styles.refreshBtn} hitSlop={8}>
+            {syncing
+              ? <ActivityIndicator size="small" color={colors.ink3} />
+              : <Icon name="rotate" size={18} stroke={colors.ink3} strokeWidth={1.8} />}
+          </Pressable>
+        )}
       </View>
 
       {Object.entries(grouped).map(([day, ms]) => (
@@ -129,6 +169,15 @@ export function HistoryScreen() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 20, gap: 14 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  refreshBtn: {
+    marginTop: 6,
+    padding: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
   pageTitle: {
     fontSize: 28,
     fontWeight: '700',

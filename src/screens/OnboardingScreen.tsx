@@ -102,7 +102,7 @@ export function OnboardingScreen() {
       });
       // Entrar numa conta existente traz o historico de volta antes de sair
       // do onboarding.
-      if (mode === 'in') await syncMatches();
+      if (mode === 'in') await syncMatches(true);
       finish();
     } catch (e) {
       const map: Record<string, string> = {

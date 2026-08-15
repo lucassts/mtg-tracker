@@ -86,8 +86,9 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
       });
       setEditHandle(player.handle);
       setPassword('');
-      // Entrar numa conta existente traz o historico de volta.
-      void syncMatches();
+      // Entrar numa conta existente traz o historico de volta, sem esperar
+      // o intervalo.
+      void syncMatches(true);
     } catch (e) {
       setError(message(e));
     } finally {

@@ -11,6 +11,7 @@ import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
 import { claimPayload, submitClaim } from '../services/social';
 import { pushMatches, pullMatches, ensureSyncId } from '../services/matchSync';
+import { shouldSync, SyncOutcome } from '../utils/syncThrottle';
 import { getArchetypeForDeck } from '../data/decks';
 
 /** Contador local para ids: `Date.now()` colide quando dois somem no mesmo ms. */
@@ -76,10 +77,14 @@ interface AppState {
   deleteCustomCounter: (id: string) => void;
   /**
    * Sobe as partidas para a conta e traz o que estiver lá.
+   *
    * Sem conta, é um no-op. Silencioso ao falhar: é cópia de segurança, não
-   * pode virar erro na cara de quem só quis anotar uma partida.
+   * pode virar erro na cara de quem só quis anotar uma partida — mas o
+   * resultado volta, para a tela poder mostrar.
+   *
+   *  só para quem não pode esperar o intervalo: ver .
    */
-  syncMatches: () => Promise<void>;
+  syncMatches: (force?: boolean) => Promise<SyncOutcome>;
   /** Popula o app com partidas fictícias, para explorar as telas sem histórico. */
   loadDemoData: () => void;
   /** Tenta enviar a fila anônima. Silencioso: falha de rede não incomoda o usuário. */
@@ -154,7 +159,9 @@ export const useStore = create<AppState>()(
         // reivindicação, senão o servidor não acha a linha para irmanar e os
         // dois lados ficam soltos.
         void (async () => {
-          await get().syncMatches();
+          // : a partida precisa estar no servidor antes da reivindicacao
+          // sair, e esperar o intervalo quebraria o pareamento.
+          await get().syncMatches(true);
           await get().claimMatch(match);
         })();
       },
@@ -499,9 +506,10 @@ export const useStore = create<AppState>()(
         }));
       },
 
-      syncMatches: async () => {
-        const { settings, matches, opponents } = get();
-        if (!settings.social.enabled) return;
+      syncMatches: async (force = false) => {
+        const { settings, matches, opponents, syncStatus } = get();
+        if (!settings.social.enabled) return 'off';
+        if (!shouldSync(syncStatus?.at, Date.now(), force)) return 'skipped';
 
         try {
           // Carimba o UUID de quem ainda não tem, e persiste antes de subir:
@@ -521,7 +529,7 @@ export const useStore = create<AppState>()(
 
           const remotas = await pullMatches();
           set({ syncStatus: { at: new Date().toISOString(), pushed: enviadas, pulled: remotas.length } });
-          if (remotas.length === 0) return;
+          if (remotas.length === 0) return 'ok';
 
           set(state => {
             const porSync = new Map(
@@ -573,7 +581,9 @@ export const useStore = create<AppState>()(
           const motivo = e instanceof Error ? e.message : String(e);
           console.warn('[store] sincronização de partidas falhou:', e);
           set({ syncStatus: { at: new Date().toISOString(), pushed: 0, pulled: 0, error: motivo } });
+          return 'error';
         }
+        return 'ok';
       },
 
       loadDemoData: () => {
