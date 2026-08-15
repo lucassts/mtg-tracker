@@ -21,17 +21,28 @@ void SplashScreen.preventAutoHideAsync();
 function AppRoot() {
   const onboarded = useStore(s => s.settings.onboarded);
   const flushTelemetry = useStore(s => s.flushTelemetry);
+  const syncMatches = useStore(s => s.syncMatches);
   const [fontsLoaded, fontError] = useFonts(fontAssets);
-  // Tenta esvaziar a fila anônima ao abrir e sempre que o app volta ao primeiro
-  // plano — é quando a conexão costuma estar de volta. Sem fila ou com o
-  // compartilhamento desligado, isso é um no-op.
+  /**
+   * Ao abrir e sempre que o app volta ao primeiro plano: esvazia a fila
+   * anônima e sincroniza as partidas da conta. É quando a conexão costuma
+   * estar de volta.
+   *
+   * A sincronização precisa estar AQUI, e não só ao salvar e ao entrar na
+   * conta. Quem atualiza o app já logado nunca passa por nenhum dos dois: as
+   * partidas ficam paradas no aparelho, e o servidor parece vazio sem que
+   * ninguém tenha feito nada errado. Foi exatamente isso que aconteceu.
+   *
+   * Sem conta ou sem fila, os dois são no-op.
+   */
   React.useEffect(() => {
-    void flushTelemetry();
+    const rodar = () => { void flushTelemetry(); void syncMatches(); };
+    rodar();
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'active') void flushTelemetry();
+      if (state === 'active') rodar();
     });
     return () => sub.remove();
-  }, [flushTelemetry]);
+  }, [flushTelemetry, syncMatches]);
 
   // Falha ao carregar fonte não impede o app de abrir: o texto sai na fonte do
   // sistema, o que é feio mas utilizável.

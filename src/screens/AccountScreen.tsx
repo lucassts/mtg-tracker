@@ -32,6 +32,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
   const social = useStore(s => s.settings.social);
   const setSocial = useStore(s => s.setSocial);
   const syncMatches = useStore(s => s.syncMatches);
+  const syncStatus = useStore(s => s.syncStatus);
   const opponents = useStore(s => s.opponents);
   const updateOpponent = useStore(s => s.updateOpponent);
 
@@ -191,6 +192,31 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                 />
               </View>
               <Text style={styles.fieldHint}>{a.handleHint}</Text>
+            </View>
+          </View>
+
+          {/* Estado da sincronização. Existe porque ela falhava calada: quem
+              atualizava o app achava que tinha subido, e não tinha. */}
+          <View style={styles.card}>
+            <View style={styles.rowCol}>
+              <Text style={styles.fieldLabel}>{a.syncLabel}</Text>
+              {syncStatus ? (
+                syncStatus.error ? (
+                  <Text style={styles.syncError}>{a.syncError(syncStatus.error)}</Text>
+                ) : (
+                  <Text style={styles.readonly}>
+                    {a.syncOk(syncStatus.pushed, syncStatus.pulled)}
+                  </Text>
+                )
+              ) : (
+                <Text style={styles.fieldHint}>{a.syncNever}</Text>
+              )}
+              <Pressable
+                onPress={() => { setBusy(true); void syncMatches().finally(() => setBusy(false)); }}
+                disabled={busy}
+              >
+                <Text style={styles.syncNow}>{busy ? a.syncing : a.syncNow}</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -358,6 +384,8 @@ const styles = StyleSheet.create({
   btnOff: { opacity: 0.35 },
 
   signOutBtn: { paddingVertical: 12, alignItems: 'center' },
+  syncNow: { fontSize: 12, fontFamily: 'Inter', fontWeight: '600', color: colors.accent, marginTop: 4 },
+  syncError: { fontSize: 12, fontFamily: 'Inter', color: colors.bad, lineHeight: 17 },
   signOutText: { fontSize: 13, fontFamily: 'Inter', fontWeight: '600', color: colors.bad },
 
   errorBox: {

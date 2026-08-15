@@ -154,6 +154,20 @@ export interface Settings {
   social: SocialSettings;
 }
 
+/**
+ * Resultado da última sincronização, para a tela de conta poder mostrar.
+ *
+ * Existe porque a sincronização falhava em silêncio: um `console.warn` que
+ * ninguém lê. Quando o servidor ainda não tinha o esquema, o app parecia estar
+ * funcionando e não estava — e não havia onde olhar para descobrir.
+ */
+export interface SyncStatus {
+  at: string;
+  pushed: number;
+  pulled: number;
+  error?: string;
+}
+
 export interface SocialSettings {
   /** Há uma conta conectada neste aparelho. Nunca é ligado sem cadastro. */
   enabled: boolean;

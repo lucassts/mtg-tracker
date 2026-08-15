@@ -5,7 +5,7 @@ import {
   Match, Settings, PendingReview, TelemetryEvent, Deck, DeckVersion, Format, Archetype,
   CounterPrefs, CustomCounter, DEFAULT_COUNTER_PREFS,
   SharePrefs, DEFAULT_SHARE_PREFS,
-  Opponent, Venue, SocialSettings, DEFAULT_SOCIAL,
+  Opponent, Venue, SocialSettings, DEFAULT_SOCIAL, SyncStatus,
 } from '../types';
 import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
@@ -28,6 +28,8 @@ interface AppState {
   opponents: Opponent[];
   /** Locais já usados neste aparelho, inclusive os do tipo casa. */
   venues: Venue[];
+  /** Como foi a última sincronização. Null antes da primeira. */
+  syncStatus: SyncStatus | null;
 
   // Actions
   addMatch: (match: Omit<Match, 'id' | 'date'>) => void;
@@ -111,6 +113,7 @@ export const useStore = create<AppState>()(
       deckVersions: [],
       opponents: [],
       venues: [],
+      syncStatus: null,
 
       addMatch: (matchData) => {
         const match: Match = {
@@ -514,9 +517,10 @@ export const useStore = create<AppState>()(
               .map(o => o.playerId as string)
           );
 
-          await pushMatches(comId, vinculados);
+          const enviadas = await pushMatches(comId, vinculados);
 
           const remotas = await pullMatches();
+          set({ syncStatus: { at: new Date().toISOString(), pushed: enviadas, pulled: remotas.length } });
           if (remotas.length === 0) return;
 
           set(state => {
@@ -563,7 +567,12 @@ export const useStore = create<AppState>()(
             };
           });
         } catch (e) {
+          // Silencioso para quem só quis anotar uma partida, mas registrado:
+          // a tela de conta mostra o motivo em vez de deixar a pessoa achando
+          // que subiu.
+          const motivo = e instanceof Error ? e.message : String(e);
           console.warn('[store] sincronização de partidas falhou:', e);
+          set({ syncStatus: { at: new Date().toISOString(), pushed: 0, pulled: 0, error: motivo } });
         }
       },
 
@@ -606,6 +615,7 @@ export const useStore = create<AppState>()(
         deckVersions: state.deckVersions,
         opponents: state.opponents,
         venues: state.venues,
+        syncStatus: state.syncStatus,
       }),
       migrate: (persisted, version) => {
         const state = persisted as Partial<AppState>;

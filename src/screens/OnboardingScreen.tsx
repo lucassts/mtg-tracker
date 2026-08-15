@@ -11,7 +11,7 @@ import { Format } from '../types';
 import { useStore } from '../store/useStore';
 import { useT } from '../i18n/useT';
 import { SOCIAL_AVAILABLE } from '../services/supabase';
-import { signUp, AuthError, HANDLE_RE, normalizeHandle } from '../services/social';
+import { signUp, signIn, AuthError, HANDLE_RE, normalizeHandle } from '../services/social';
 
 const FORMATS = [
   { l: 'Commander', s: 'EDH · 4p' },
@@ -53,11 +53,18 @@ export function OnboardingScreen() {
   const [share, setShare] = React.useState(true);
   const updateSettings = useStore(s => s.updateSettings);
   const setSocial = useStore(s => s.setSocial);
+  const syncMatches = useStore(s => s.syncMatches);
 
   // A conta é o último passo, e só existe quando há servidor: num build sem
   // Supabase configurado o passo seria uma tela que não faz nada.
   const LAST = SOCIAL_AVAILABLE ? 5 : 4;
 
+  /**
+   * Criar OU entrar. Quem reinstala o app precisa recuperar o historico aqui
+   * mesmo: mandar essa pessoa pular o passo e cavar em Configuracoes e o
+   * caminho mais rapido para ela achar que perdeu tudo.
+   */
+  const [mode, setMode] = React.useState<'up' | 'in'>('up');
   const [email, setEmail] = React.useState('');
   const [handle, setHandle] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -65,10 +72,10 @@ export function OnboardingScreen() {
   const [error, setError] = React.useState<string | null>(null);
 
   const cleanHandle = normalizeHandle(handle);
-  const canCreate =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
-    HANDLE_RE.test(cleanHandle) &&
-    password.length >= MIN_PASSWORD;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canCreate = mode === 'in'
+    ? emailOk && password.length > 0
+    : emailOk && HANDLE_RE.test(cleanHandle) && password.length >= MIN_PASSWORD;
 
   const finish = () => {
     updateSettings({
@@ -84,13 +91,18 @@ export function OnboardingScreen() {
     setBusy(true);
     setError(null);
     try {
-      const player = await signUp(email, cleanHandle, password);
+      const player = mode === 'up'
+        ? await signUp(email, cleanHandle, password)
+        : await signIn(email, password);
       setSocial({
         enabled: true,
         playerId: player.id,
         handle: player.handle,
         email: email.trim().toLowerCase(),
       });
+      // Entrar numa conta existente traz o historico de volta antes de sair
+      // do onboarding.
+      if (mode === 'in') await syncMatches();
       finish();
     } catch (e) {
       const map: Record<string, string> = {
@@ -214,6 +226,20 @@ export function OnboardingScreen() {
             <Text style={styles.h2}>{o.step5Title}</Text>
             <Text style={styles.body2}>{o.step5Body}</Text>
 
+            <View style={styles.tabs}>
+              {(['up', 'in'] as const).map(m => (
+                <Pressable
+                  key={m}
+                  onPress={() => { setMode(m); setError(null); }}
+                  style={[styles.tab, mode === m && styles.tabOn]}
+                >
+                  <Text style={[styles.tabText, mode === m && styles.tabTextOn]}>
+                    {m === 'up' ? a.signUp : a.signIn}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
             <View style={styles.card}>
               <Text style={styles.sectionLabel}>{a.email}</Text>
               <TextInput
@@ -228,21 +254,26 @@ export function OnboardingScreen() {
                 style={styles.input}
               />
 
-              <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{a.handle}</Text>
-              <View style={styles.handleRow}>
-                <Text style={styles.at}>@</Text>
-                <TextInput
-                  value={handle}
-                  onChangeText={v => setHandle(normalizeHandle(v))}
-                  placeholder={a.handlePlaceholder}
-                  placeholderTextColor={colors.ink4}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={20}
-                  style={[styles.input, styles.handleInput]}
-                />
-              </View>
-              <Text style={styles.hint}>{a.handleHint}</Text>
+              {/* Apelido só existe ao criar: quem entra já tem o dele. */}
+              {mode === 'up' && (
+                <>
+                  <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{a.handle}</Text>
+                  <View style={styles.handleRow}>
+                    <Text style={styles.at}>@</Text>
+                    <TextInput
+                      value={handle}
+                      onChangeText={v => setHandle(normalizeHandle(v))}
+                      placeholder={a.handlePlaceholder}
+                      placeholderTextColor={colors.ink4}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={20}
+                      style={[styles.input, styles.handleInput]}
+                    />
+                  </View>
+                  <Text style={styles.hint}>{a.handleHint}</Text>
+                </>
+              )}
 
               <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{a.password}</Text>
               <TextInput
@@ -253,7 +284,7 @@ export function OnboardingScreen() {
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
-                textContentType="newPassword"
+                textContentType={mode === 'up' ? 'newPassword' : 'password'}
                 style={styles.input}
               />
             </View>
@@ -284,7 +315,7 @@ export function OnboardingScreen() {
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.ctaText}>
-              {step === LAST ? (step === 5 ? a.signUp : o.start) : o.continue}
+              {step === LAST ? (step === 5 ? (mode === 'up' ? a.signUp : a.signIn) : o.start) : o.continue}
             </Text>
           )}
         </Pressable>
@@ -417,6 +448,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     color: colors.ink,
   },
+  tabs: {
+    flexDirection: 'row',
+    gap: 6,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: colors.bg2,
+  },
+  tab: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
+  tabOn: { backgroundColor: colors.surface },
+  tabText: { fontSize: 13, fontFamily: 'Inter', fontWeight: '500', color: colors.ink3 },
+  tabTextOn: { color: colors.ink, fontWeight: '600' },
   input: {
     fontSize: 14,
     fontFamily: 'Inter',
