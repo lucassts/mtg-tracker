@@ -155,7 +155,7 @@ export function OnboardingScreen() {
 
         {step === 2 && (
           <>
-            <Text style={styles.stepLabel}>{o.step2Label}</Text>
+            <Text style={styles.stepLabel}>{o.stepLabel(2, LAST)}</Text>
             <Text style={styles.h2}>{o.step2Title}</Text>
             <Text style={styles.body2}>{o.step2Body}</Text>
             <View style={styles.formatGrid}>
@@ -180,7 +180,7 @@ export function OnboardingScreen() {
 
         {step === 3 && (
           <>
-            <Text style={styles.stepLabel}>{o.step3Label}</Text>
+            <Text style={styles.stepLabel}>{o.stepLabel(3, LAST)}</Text>
             <Text style={styles.h2}>{o.step3Title}</Text>
             <Text style={styles.body2}>{o.step3Body}</Text>
             <DeckSelector
@@ -201,7 +201,7 @@ export function OnboardingScreen() {
 
         {step === 4 && (
           <>
-            <Text style={styles.stepLabel}>{o.step4Label}</Text>
+            <Text style={styles.stepLabel}>{o.stepLabel(4, LAST)}</Text>
             <Text style={styles.h2}>{o.step4Title}</Text>
             <Text style={styles.body2}>{o.step4Body}</Text>
             <View style={styles.card}>
@@ -222,7 +222,7 @@ export function OnboardingScreen() {
 
         {step === 5 && (
           <>
-            <Text style={styles.stepLabel}>{o.step5Label}</Text>
+            <Text style={styles.stepLabel}>{o.stepLabel(5, LAST)}</Text>
             <Text style={styles.h2}>{o.step5Title}</Text>
             <Text style={styles.body2}>{o.step5Body}</Text>
 
