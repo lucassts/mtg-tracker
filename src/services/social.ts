@@ -1,11 +1,11 @@
 /**
- * social.ts — conta anônima, vínculos entre jogadores, locais e confirmação
- * de partida. É a única porta do app para o lado social do Supabase.
+ * social.ts — conta, amizades, locais e confirmação de partida. É a única
+ * porta do app para o lado social do Supabase.
  *
- * Nada aqui roda sem o usuário ligar explicitamente em Configurações. A conta
- * é anônima: sem e-mail, sem senha, sem nome real. O que ela dá é um
- * identificador estável, que é o mínimo para um oponente conseguir confirmar
- * uma partida sua — ver docs/rfc-001.
+ * Nada aqui roda sem o usuário criar uma conta explicitamente. A conta é
+ * e-mail + apelido + senha, criada no próprio app. O e-mail não é verificado:
+ * ele serve para entrar e para o amigo achar você, não como prova de posse —
+ * ver o README.
  */
 
 import { getSupabase } from './supabase';
@@ -15,7 +15,22 @@ import { APP_VERSION } from '../config';
 
 export interface RemotePlayer {
   id: string;
-  display_name: string;
+  /** Apelido único, em minúsculas. É a identidade pública. */
+  handle: string;
+}
+
+export interface FriendRequest {
+  id: string;
+  direction: 'in' | 'out';
+  otherId: string;
+  otherHandle: string;
+  createdAt: string;
+}
+
+export interface Friend {
+  id: string;
+  handle: string;
+  since: string;
 }
 
 export interface RemoteVenue {
@@ -58,75 +73,207 @@ export async function currentPlayerId(): Promise<string | null> {
   return data.session?.user.id ?? null;
 }
 
-/**
- * Liga a parte social: cria a conta anônima se não existir e registra o
- * apelido. Idempotente — chamar de novo só atualiza o apelido.
- */
-export async function enableSocial(displayName: string): Promise<RemotePlayer> {
-  const supabase = requireClient();
+/** Regra do apelido, repetida no banco. Aqui existe para avisar antes da ida. */
+export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session) {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) throw error;
-  }
-
-  const { data, error } = await supabase.rpc('ensure_player', {
-    p_display_name: displayName.trim().slice(0, 40),
-  });
-  if (error) throw error;
-  return data as RemotePlayer;
+export function normalizeHandle(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^@/, '');
 }
 
-/** Sai da conta. Os dados locais continuam; só o vínculo remoto para. */
-export async function disableSocial(): Promise<void> {
+/** Erro com causa legível, para a tela escolher a mensagem certa. */
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly kind:
+      | 'invalid-handle' | 'handle-taken' | 'email-taken'
+      | 'bad-credentials' | 'needs-confirmation' | 'weak-password' | 'unknown'
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+/**
+ * Cria a conta e registra o apelido.
+ *
+ * As duas coisas são um passo só de propósito: uma conta sem apelido não
+ * consegue ser achada nem exibida, e deixar esse estado existir seria criar um
+ * usuário quebrado sempre que a segunda chamada falhasse. Se o apelido for
+ * recusado, a sessão recém-criada é encerrada — melhor não ter conta do que
+ * ter uma que não dá para usar.
+ */
+export async function signUp(
+  email: string,
+  handle: string,
+  password: string
+): Promise<RemotePlayer> {
+  const supabase = requireClient();
+  const clean = normalizeHandle(handle);
+
+  if (!HANDLE_RE.test(clean)) {
+    throw new AuthError('apelido inválido', 'invalid-handle');
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('already registered') || msg.includes('already been registered')) {
+      throw new AuthError(error.message, 'email-taken');
+    }
+    if (msg.includes('password')) throw new AuthError(error.message, 'weak-password');
+    throw new AuthError(error.message, 'unknown');
+  }
+
+  // Sessão nula = confirmação de e-mail ligada no projeto. O app não tem para
+  // onde ir com isso, então falha dizendo exatamente o que está errado.
+  if (!data.session) {
+    throw new AuthError('confirmação de e-mail está ligada no projeto', 'needs-confirmation');
+  }
+
+  try {
+    return await registerHandle(clean);
+  } catch (e) {
+    await supabase.auth.signOut();
+    throw e;
+  }
+}
+
+export async function signIn(email: string, password: string): Promise<RemotePlayer> {
+  const supabase = requireClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (error) throw new AuthError(error.message, 'bad-credentials');
+  return me();
+}
+
+export async function signOut(): Promise<void> {
   const supabase = getSupabase();
   await supabase?.auth.signOut();
 }
 
-// ─── Vínculo entre jogadores ────────────────────────────────
-
-export async function createInvite(): Promise<string> {
+/** Grava o apelido. Também é o caminho de trocar de apelido depois. */
+export async function registerHandle(handle: string): Promise<RemotePlayer> {
   const supabase = requireClient();
-  const { data, error } = await supabase.rpc('create_invite');
-  if (error) throw error;
-  return String(data);
-}
+  const clean = normalizeHandle(handle);
+  if (!HANDLE_RE.test(clean)) {
+    throw new AuthError('apelido inválido', 'invalid-handle');
+  }
 
-export interface InviteStatus {
-  used: boolean;
-  playerId?: string;
-  playerName?: string;
-}
-
-/**
- * Diz se um convite já foi aceito. Quem convida não é avisado — o resgate
- * acontece no aparelho do outro — então o app pergunta ao abrir a tela.
- */
-export async function inviteStatus(code: string): Promise<InviteStatus> {
-  const supabase = requireClient();
-  const { data, error } = await supabase.rpc('invite_status', { p_code: code });
-  if (error) throw error;
+  const { data, error } = await supabase.rpc('register_player', { p_handle: clean });
+  if (error) {
+    if (error.code === '23505') throw new AuthError(error.message, 'handle-taken');
+    if (error.code === '22023') throw new AuthError(error.message, 'invalid-handle');
+    throw new AuthError(error.message, 'unknown');
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return { used: false };
-  return {
-    used: Boolean(row.used),
-    playerId: row.player_id ?? undefined,
-    playerName: row.player_name || undefined,
-  };
+  return { id: String(row.id), handle: String(row.handle) };
 }
 
-export async function redeemInvite(code: string): Promise<RemotePlayer> {
+/** Quem está logado. Lança se ninguém estiver. */
+export async function me(): Promise<RemotePlayer> {
   const supabase = requireClient();
-  const { data, error } = await supabase.rpc('redeem_invite', {
-    p_code: code.trim().toUpperCase(),
+  const { data: session } = await supabase.auth.getSession();
+  const uid = session.session?.user.id;
+  if (!uid) throw new AuthError('sem sessão', 'bad-credentials');
+
+  const { data, error } = await supabase
+    .from('players')
+    .select('id, handle')
+    .eq('id', uid)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new AuthError('conta sem apelido', 'invalid-handle');
+  return { id: String(data.id), handle: String(data.handle) };
+}
+
+/** E-mail da sessão. Só para mostrar na tela de conta. */
+export async function currentEmail(): Promise<string> {
+  const supabase = getSupabase();
+  if (!supabase) return '';
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.email ?? '';
+}
+
+// ─── Amizades ───────────────────────────────────────────────
+
+export interface SendResult {
+  /** Nulo quando já eram amigos e nada precisou ser criado. */
+  requestId: string | null;
+  targetId: string;
+  targetHandle: string;
+  /** Vínculo já existe — por pedido cruzado ou porque já eram amigos. */
+  friends: boolean;
+}
+
+/** Manda pedido para um apelido ou e-mail exato. */
+export async function sendFriendRequest(query: string): Promise<SendResult> {
+  const supabase = requireClient();
+  const { data, error } = await supabase.rpc('send_friend_request', {
+    p_query: query.trim(),
   });
   if (error) throw error;
 
   const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error('convite inválido');
-  return { id: row.inviter_id, display_name: row.inviter_name };
+  if (!row) throw new Error('não achei ninguém com esse apelido ou e-mail');
+  return {
+    requestId: row.request_id ? String(row.request_id) : null,
+    targetId: String(row.target_id),
+    targetHandle: String(row.target_handle),
+    friends: Boolean(row.already_friends),
+  };
+}
+
+export async function listFriendRequests(): Promise<FriendRequest[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('list_friend_requests');
+  if (error) throw error;
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: String(r.id),
+    direction: r.direction === 'out' ? 'out' : 'in',
+    otherId: String(r.other_id),
+    otherHandle: String(r.other_handle),
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function resolveFriendRequest(
+  id: string,
+  accept: boolean
+): Promise<RemotePlayer> {
+  const supabase = requireClient();
+  const { data, error } = await supabase.rpc('resolve_friend_request', {
+    p_id: id,
+    p_accept: accept,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return { id: String(row.other_id), handle: String(row.other_handle) };
+}
+
+export async function listFriends(): Promise<Friend[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('list_friends');
+  if (error) throw error;
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: String(r.id),
+    handle: String(r.handle),
+    since: String(r.since),
+  }));
+}
+
+export async function removeFriend(otherId: string): Promise<void> {
+  const supabase = requireClient();
+  const { error } = await supabase.rpc('remove_friend', { p_other: otherId });
+  if (error) throw error;
 }
 
 // ─── Locais ─────────────────────────────────────────────────
@@ -203,7 +350,7 @@ export async function listPendingClaims(): Promise<PendingClaim[]> {
 
   const { data, error } = await supabase
     .from('match_claims')
-    .select('id, reporter_id, payload, created_at, players!match_claims_reporter_id_fkey(display_name)')
+    .select('id, reporter_id, payload, created_at, players!match_claims_reporter_id_fkey(handle)')
     .eq('opponent_id', me)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -214,7 +361,7 @@ export async function listPendingClaims(): Promise<PendingClaim[]> {
     id: String(row.id),
     reporter_id: String(row.reporter_id),
     reporterName:
-      (row.players as { display_name?: string } | null)?.display_name || '',
+      (row.players as { handle?: string } | null)?.handle || '',
     payload: row.payload as TelemetryEvent & { venue_id?: string },
     created_at: String(row.created_at),
   }));

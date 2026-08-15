@@ -55,20 +55,24 @@ Eventos são acumulados localmente e enviados em lote quando há conexão. Isso 
 
 Desligar o compartilhamento **descarta a fila imediatamente**, sem tentar enviá-la antes. Configurações mostra quantos eventos estão pendentes enquanto o compartilhamento está ligado.
 
-### 3. Parte social — desligada por padrão
+### 3. Conta e amigos — opcional
 
-Oponentes, locais compartilhados e confirmação de partida exigem uma **conta anônima**. Ela é criada só quando você liga a chave em Configurações → Oponentes. Sem ligar, nada disso existe e o app funciona inteiro: dá para anotar oponente por apelido e local do tipo casa sem servidor nenhum.
+Amigos, locais compartilhados e confirmação de partida exigem uma **conta**. Ela é criada só quando você quer, em Configurações → Conta. Sem criar, nada disso existe e o app funciona inteiro: dá para anotar oponente por apelido e local do tipo casa sem servidor nenhum.
 
-A conta é anônima de verdade: **sem e-mail, sem senha, sem nome real**. O que ela dá é um identificador estável — o mínimo para o aparelho do seu oponente conseguir confirmar uma partida sua.
+A conta é **e-mail, apelido e senha**, criados dentro do app. O apelido é único e público — é por ele, ou pelo e-mail, que um amigo manda pedido para você.
+
+**O e-mail não é verificado.** Ele serve para entrar e para ser encontrado, não como prova de que o endereço é seu. Isso é uma decisão consciente de produto, e tem uma consequência que você precisa conhecer: alguém pode se cadastrar com um e-mail que não é dele e receber os pedidos de amizade destinados ao dono daquele endereço. Se isso passar a importar, o caminho é ligar a confirmação de e-mail no Supabase.
 
 #### O que a conta guarda no servidor
 
 | Guarda | Não guarda |
 |---|---|
-| um id de conta | e-mail, telefone, senha |
-| o apelido que **você** escolheu para si | seu nome real |
-| com quem você está vinculado | sua agenda, contatos ou redes |
-| partidas aguardando confirmação | localização |
+| e-mail e senha (com hash, pelo Supabase Auth) | seu nome real |
+| o apelido que **você** escolheu para si | sua agenda, contatos ou redes |
+| de quem você é amigo e pedidos pendentes | localização |
+| partidas aguardando confirmação | seu histórico de partidas |
+
+O histórico de partidas continua **só no aparelho**. A conta é identidade, não armazenamento: nem os decks, nem as partidas, nem as estatísticas são enviados para o servidor por causa dela.
 
 #### Confirmação de partida
 
@@ -86,7 +90,7 @@ Não há rastreamento de localização. A cidade que você digita serve para ord
 
 #### Desligar
 
-Desligar a parte social encerra a sessão e transforma todos os oponentes vinculados em oponentes locais. O histórico continua intacto.
+Sair da conta encerra a sessão e transforma todos os oponentes vinculados em oponentes locais. O histórico continua intacto no aparelho.
 
 ## Como os dados ficam armazenados
 

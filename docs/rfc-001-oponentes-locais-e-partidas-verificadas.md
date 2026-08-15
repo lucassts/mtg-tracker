@@ -1,7 +1,19 @@
 # RFC 001 — Oponentes, locais e partidas verificadas
 
-**Status:** proposta, aguardando decisão
+**Status:** implementada nas fases 1 e 2, com o modelo de conta substituído
 **Autor:** discussão com Lucas, agosto de 2026
+
+> **Superseded em parte.** Este documento descreve a conta como **anônima** e o
+> vínculo como **convite por código ou QR**. Nenhum dos dois existe mais: a
+> conta passou a ser **e-mail, apelido e senha**, e o vínculo virou **pedido de
+> amizade** por apelido ou e-mail. A troca foi feita porque o modelo anônimo
+> saía caro para a próxima coisa que se quer construir — organizar campeonatos,
+> que precisa de identidade estável e recuperável.
+>
+> Continua valendo: oponente local sem conta, antifraude por confirmação dos
+> dois lados, base compartilhada de locais e a regra de nunca guardar quem
+> jogou contra quem na base de meta. O esquema novo está em
+> [`supabase/schema_accounts.sql`](../supabase/schema_accounts.sql).
 
 ## O que se quer
 

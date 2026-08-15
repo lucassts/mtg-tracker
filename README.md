@@ -18,9 +18,11 @@ Traz também um contador de vida para 2 a 6 jogadores, com contadores de storm, 
 | **Revisão** | Confere o que o modelo extraiu, com marca de confiança por campo, antes de salvar |
 | **Stats** | Win rate, evolução, on the play vs on the draw, desempenho por deck e por arquétipo do oponente |
 | **Partidas** | Histórico agrupado por data, com edição |
-| **Configurações** | Padrões, idioma, privacidade, decks, contadores, oponentes, CSV |
+| **Configurações** | Padrões, idioma, privacidade, decks, contadores, card de estatísticas, conta, oponentes, CSV |
 
-Registrar quem foi o oponente e onde a partida aconteceu é opcional e funciona sem conta. Vincular a conta do oponente — por QR ou link — permite que ele **confirme o resultado**, e só partida confirmada entra na base de meta como verificada. O desenho e o porquê estão em [docs/rfc-001](docs/rfc-001-oponentes-locais-e-partidas-verificadas.md).
+Registrar quem foi o oponente e onde a partida aconteceu é opcional e funciona sem conta. Virar amigo do oponente — pedido por apelido ou e-mail — permite que ele **confirme o resultado**, e só partida confirmada entra na base de meta como verificada. O desenho e o porquê estão em [docs/rfc-001](docs/rfc-001-oponentes-locais-e-partidas-verificadas.md).
+
+A conta é e-mail, apelido e senha, criados no próprio app. **O e-mail não é verificado**: serve para entrar e para o amigo achar você, não como prova de posse do endereço — ver [PRIVACY.md](PRIVACY.md). O histórico de partidas não sobe para o servidor; a conta é identidade, não armazenamento.
 
 Interface em português, inglês e japonês.
 
@@ -28,7 +30,7 @@ Interface em português, inglês e japonês.
 
 O app usa [`llama.rn`](https://github.com/mybigday/llama.rn) para rodar **Qwen2.5-0.5B-Instruct Q4_K_M** (~350 MB) localmente. O modelo é baixado do Hugging Face na primeira vez que você usa voz ou texto livre — o resto do app funciona antes disso.
 
-Sua voz e suas notas nunca são enviadas para lugar nenhum. Não há servidor de inferência, não há conta, não há assinatura.
+Sua voz e suas notas nunca são enviadas para lugar nenhum. Não há servidor de inferência e não há assinatura. A conta existe só para a parte de amigos, e é opcional.
 
 ## Privacidade
 

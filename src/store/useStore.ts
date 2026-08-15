@@ -508,7 +508,7 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'mtg-tracker-storage',
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         matches: state.matches,
@@ -569,11 +569,39 @@ export const useStore = create<AppState>()(
           }
         }
 
+
         // v4 → v5: o card de compartilhamento passa a ser configurável. Quem
         // já usava recebe o padrão, que é o card como ele sempre foi — mais
         // os blocos novos desligados, porque expõem nome de terceiro.
         if (version < 5 && state.settings && !state.settings.sharePrefs) {
           state.settings = { ...state.settings, sharePrefs: DEFAULT_SHARE_PREFS };
+        }
+
+        // v5 → v6: a conta anônima vira conta com e-mail e apelido. Ninguém
+        // migra automaticamente: a sessão antiga não tem credencial e não há
+        // como transformá-la em login sem pedir e-mail e senha. Volta ao
+        // estado desconectado, e os oponentes viram locais — o histórico e os
+        // apelidos continuam intactos, é só o vínculo remoto que se perde.
+        if (version < 6) {
+          const old = state.settings?.social as
+            | (Partial<SocialSettings> & { displayName?: string })
+            | undefined;
+          if (state.settings) {
+            state.settings = {
+              ...state.settings,
+              social: {
+                ...DEFAULT_SOCIAL,
+                handle: old?.displayName ?? '',
+                homeCity: old?.homeCity ?? '',
+              },
+            };
+          }
+          state.opponents = (state.opponents ?? []).map(o => ({
+            ...o,
+            linkState: 'local' as const,
+            playerId: undefined,
+            remoteName: undefined,
+          }));
         }
 
         return state as AppState;

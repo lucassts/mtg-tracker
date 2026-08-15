@@ -36,11 +36,11 @@ export interface Match {
 // ─── Oponentes ──────────────────────────────────────────────
 
 /**
- * `local`    — só um apelido neste aparelho, ninguém do outro lado.
- * `invited`  — você gerou um convite e ninguém aceitou ainda.
- * `linked`   — a outra pessoa aceitou; dá para confirmar partidas.
+ * `local`     — só um apelido neste aparelho, ninguém do outro lado.
+ * `requested` — você mandou pedido de amizade e ninguém respondeu ainda.
+ * `linked`    — a outra pessoa aceitou; dá para confirmar partidas.
  */
-export type OpponentLink = 'local' | 'invited' | 'linked';
+export type OpponentLink = 'local' | 'requested' | 'linked';
 
 export interface Opponent {
   id: string;
@@ -49,10 +49,8 @@ export interface Opponent {
   linkState: OpponentLink;
   /** Conta remota, quando vinculado. */
   playerId?: string;
-  /** Como a pessoa se chama do lado dela. Só existe depois do vínculo. */
+  /** O apelido que a pessoa escolheu. Só existe depois do vínculo. */
   remoteName?: string;
-  /** Código do convite em aberto, para reexibir o QR. */
-  inviteCode?: string;
   favorite?: boolean;
   createdAt: string;
 }
@@ -142,19 +140,25 @@ export interface Settings {
 }
 
 export interface SocialSettings {
-  /** Desligado por padrão. É o único lugar que cria conta. */
+  /** Há uma conta conectada neste aparelho. Nunca é ligado sem cadastro. */
   enabled: boolean;
-  /** Id da conta anônima, quando ligada. */
+  /** Id da conta. */
   playerId?: string;
-  /** Apelido que você escolhe para si; é o que o oponente vê. */
-  displayName: string;
+  /**
+   * Apelido único, em minúsculas. É a identidade pública: o que o oponente vê
+   * e por onde ele acha você. O e-mail serve para o mesmo, mas não é exibido.
+   */
+  handle: string;
+  /** E-mail da conta. Guardado só para preencher a tela de login. */
+  email: string;
   /** Cidade padrão nas buscas de local. Fica no aparelho, não é enviada. */
   homeCity: string;
 }
 
 export const DEFAULT_SOCIAL: SocialSettings = {
   enabled: false,
-  displayName: '',
+  handle: '',
+  email: '',
   homeCity: '',
 };
 

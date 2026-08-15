@@ -1,38 +1,13 @@
 /**
- * Deep link de convite.
+ * Endereços do app.
  *
- * O QR e o link carregam o mesmo código. O endereço https existe para quem
- * ainda não tem o app instalado: abre o preview web, que explica o que é e
- * oferece o código para colar.
+ * O convite por código e por QR deixou de existir quando a conta passou a ter
+ * e-mail e apelido: adicionar alguém agora é pedido de amizade, e nada disso
+ * precisa chegar por link. O que sobra é o endereço do preview web.
  */
-
-import * as Linking from 'expo-linking';
 
 /** Precisa bater com `expo.scheme` no app.json. */
 export const APP_SCHEME = 'mtgtracker';
 
-/** Página que atende o link quando o app não está instalado. */
+/** Preview web do app. */
 export const WEB_BASE = 'https://mtg-tracker-livid.vercel.app';
-
-export function inviteUrl(code: string): string {
-  return `${WEB_BASE}/link/${code}`;
-}
-
-export function inviteDeepLink(code: string): string {
-  return `${APP_SCHEME}://link/${code}`;
-}
-
-/**
- * Extrai o código de convite de uma URL, seja o esquema do app ou o https.
- * Devolve null quando a URL não é um convite.
- */
-export function parseInviteUrl(url: string): string | null {
-  if (!url) return null;
-  try {
-    const { path } = Linking.parse(url);
-    const match = (path ?? '').match(/(?:^|\/)link\/([A-Za-z0-9]+)/);
-    return match ? match[1].toUpperCase() : null;
-  } catch {
-    return null;
-  }
-}

@@ -3,27 +3,28 @@ import {
   View, Text, Pressable, ScrollView, StyleSheet, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
-import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
-import { Toggle } from '../components/Toggle';
 import { useStore } from '../store/useStore';
 import { Opponent } from '../types';
 import { useT } from '../i18n/useT';
 import { SOCIAL_AVAILABLE } from '../services/supabase';
 import {
-  createInvite, enableSocial, disableSocial, redeemInvite, inviteStatus,
+  sendFriendRequest, listFriendRequests, resolveFriendRequest,
+  listFriends, removeFriend, FriendRequest,
 } from '../services/social';
-import { inviteUrl } from '../services/linking';
 
-export function OpponentsScreen({ onBack }: { onBack: () => void }) {
+export function OpponentsScreen({
+  onBack, onOpenAccount,
+}: {
+  onBack: () => void;
+  onOpenAccount: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const o = t.opponents;
 
   const social = useStore(s => s.settings.social);
-  const setSocial = useStore(s => s.setSocial);
   const opponents = useStore(s => s.opponents);
   const matches = useStore(s => s.matches);
   const addOpponent = useStore(s => s.addOpponent);
@@ -31,11 +32,13 @@ export function OpponentsScreen({ onBack }: { onBack: () => void }) {
   const deleteOpponent = useStore(s => s.deleteOpponent);
 
   const [nickname, setNickname] = React.useState('');
-  const [displayName, setDisplayName] = React.useState(social.displayName);
+  const [friendQuery, setFriendQuery] = React.useState('');
+  const [linkingId, setLinkingId] = React.useState<string | null>(null);
+  const [linkQuery, setLinkQuery] = React.useState('');
+  const [requests, setRequests] = React.useState<FriendRequest[]>([]);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const [showQr, setShowQr] = React.useState<string | null>(null);
-  const [redeemCode, setRedeemCode] = React.useState('');
+  const [notice, setNotice] = React.useState<string | null>(null);
 
   /** Quantas partidas contra cada oponente, para ordenar por convivência. */
   const counts = React.useMemo(() => {
@@ -55,43 +58,57 @@ export function OpponentsScreen({ onBack }: { onBack: () => void }) {
   );
 
   /**
-   * Convites em aberto: pergunta ao servidor se já foram aceitos.
-   * Quem convidou não recebe aviso, porque o resgate acontece no aparelho do
-   * outro — sem esta checagem o vínculo existiria no banco e o app nunca saberia.
+   * Sincroniza com o servidor: quem já é amigo vira oponente vinculado, e
+   * quem aceitou um pedido meu sai de "aguardando".
+   *
+   * É por consulta, e não por aviso, porque aceitar acontece no aparelho da
+   * outra pessoa — sem perguntar, o vínculo existiria no banco e este app
+   * nunca saberia. Roda ao abrir a tela, que é quando importa.
    */
-  React.useEffect(() => {
+  const sync = React.useCallback(async () => {
     if (!social.enabled) return;
+    const [reqs, friends] = await Promise.all([listFriendRequests(), listFriends()]);
 
-    const pending = opponents.filter(x => x.linkState === 'invited' && x.inviteCode);
-    if (pending.length === 0) return;
+    setRequests(reqs);
 
-    let cancelled = false;
-    void (async () => {
-      for (const opponent of pending) {
-        try {
-          const status = await inviteStatus(opponent.inviteCode!);
-          if (cancelled || !status.used || !status.playerId) continue;
-          updateOpponent(opponent.id, {
-            linkState: 'linked',
-            playerId: status.playerId,
-            remoteName: status.playerName,
-            inviteCode: undefined,
-          });
-        } catch {
-          // Convite expirado ou apagado: deixa como está e segue.
+    friends.forEach(friend => {
+      const existing = useStore.getState().opponents.find(op => op.playerId === friend.id);
+      if (existing) {
+        if (existing.linkState !== 'linked' || existing.remoteName !== friend.handle) {
+          updateOpponent(existing.id, { linkState: 'linked', remoteName: friend.handle });
         }
+        return;
       }
-    })();
+      // Amigo sem oponente correspondente: cria um, porque foi exatamente
+      // isso que a pessoa pediu ao aceitar — passar a registrar partidas dela.
+      const created = addOpponent(friend.handle);
+      if (created) {
+        updateOpponent(created.id, {
+          linkState: 'linked', playerId: friend.id, remoteName: friend.handle,
+        });
+      }
+    });
 
-    return () => { cancelled = true; };
-    // Só na montagem e ao ligar a conta: rodar a cada mudança de `opponents`
-    // criaria um laço, já que o efeito escreve nessa mesma lista.
+    // Amizade desfeita do outro lado: volta a ser oponente local.
+    const friendIds = new Set(friends.map(f => f.id));
+    useStore.getState().opponents.forEach(op => {
+      if (op.linkState === 'linked' && op.playerId && !friendIds.has(op.playerId)) {
+        updateOpponent(op.id, { linkState: 'local', playerId: undefined, remoteName: undefined });
+      }
+    });
+  }, [social.enabled, addOpponent, updateOpponent]);
+
+  React.useEffect(() => {
+    void sync().catch(() => { /* sem rede: a tela funciona como estava */ });
+    // Só ao abrir e ao entrar/sair da conta. Depender de `opponents` criaria um
+    // laço, já que o efeito escreve nessa mesma lista.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [social.enabled]);
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
     setError(null);
+    setNotice(null);
     try {
       await fn();
     } catch (e) {
@@ -101,49 +118,55 @@ export function OpponentsScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const toggleSocial = (on: boolean) => {
-    if (!on) {
-      void run('social', async () => {
-        await disableSocial();
-        setSocial({ enabled: false, playerId: undefined });
-      });
-      return;
-    }
-    void run('social', async () => {
-      const name = displayName.trim() || o.defaultName;
-      const player = await enableSocial(name);
-      setSocial({ enabled: true, playerId: player.id, displayName: name });
-      setDisplayName(name);
-    });
-  };
+  /** Manda pedido e, se quiser, amarra o resultado a um oponente já existente. */
+  const invite = (query: string, opponentId?: string) =>
+    run(opponentId ?? 'add', async () => {
+      const result = await sendFriendRequest(query);
 
-  const startInvite = (opponent: Opponent) =>
-    run(opponent.id, async () => {
-      const code = await createInvite();
-      updateOpponent(opponent.id, { linkState: 'invited', inviteCode: code });
-      setShowQr(code);
-    });
+      const target = opponentId
+        ? opponents.find(x => x.id === opponentId)
+        : opponents.find(x => x.remoteName === result.targetHandle)
+          ?? addOpponent(result.targetHandle);
 
-  const doRedeem = () =>
-    run('redeem', async () => {
-      const player = await redeemInvite(redeemCode);
-      const created = addOpponent(player.display_name || o.defaultOpponentName);
-      if (created) {
-        updateOpponent(created.id, {
-          linkState: 'linked',
-          playerId: player.id,
-          remoteName: player.display_name,
+      if (target) {
+        updateOpponent(target.id, {
+          linkState: result.friends ? 'linked' : 'requested',
+          playerId: result.targetId,
+          remoteName: result.targetHandle,
         });
       }
-      setRedeemCode('');
+
+      setNotice(result.friends ? o.nowFriends(result.targetHandle) : o.requestSent(result.targetHandle));
+      setFriendQuery('');
+      setLinkQuery('');
+      setLinkingId(null);
+      await sync();
+    });
+
+  const answer = (request: FriendRequest, accept: boolean) =>
+    run(request.id, async () => {
+      await resolveFriendRequest(request.id, accept);
+      await sync();
     });
 
   const confirmDelete = (opponent: Opponent) => {
     Alert.alert(o.deleteTitle, o.deleteBody(opponent.nickname), [
       { text: o.cancel, style: 'cancel' },
-      { text: o.delete, style: 'destructive', onPress: () => deleteOpponent(opponent.id) },
+      {
+        text: o.delete,
+        style: 'destructive',
+        onPress: () => {
+          if (opponent.linkState === 'linked' && opponent.playerId) {
+            void removeFriend(opponent.playerId).catch(() => {});
+          }
+          deleteOpponent(opponent.id);
+        },
+      },
     ]);
   };
+
+  const incoming = requests.filter(r => r.direction === 'in');
+  const outgoing = requests.filter(r => r.direction === 'out');
 
   return (
     <ScrollView
@@ -188,94 +211,103 @@ export function OpponentsScreen({ onBack }: { onBack: () => void }) {
         </View>
       </View>
 
-      {/* Conta — só necessária para vincular e confirmar */}
+      {/* Amigos — precisa de conta */}
       <View>
-        <Text style={styles.sectionLabel}>{o.accountLabel}</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Icon name="users" size={18} stroke={colors.ink3} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{o.accountTitle}</Text>
-              <Text style={styles.rowSub}>{o.accountSub}</Text>
+        <Text style={styles.sectionLabel}>{o.friendsLabel}</Text>
+
+        {!SOCIAL_AVAILABLE ? (
+          <View style={styles.card}>
+            <View style={styles.rowCol}>
+              <Text style={styles.warnText}>{o.notConfigured}</Text>
             </View>
-            {busy === 'social' ? (
-              <ActivityIndicator color={colors.ink3} />
-            ) : (
-              <Toggle
-                value={social.enabled}
-                onValueChange={toggleSocial}
-                disabled={!SOCIAL_AVAILABLE}
-              />
-            )}
           </View>
-
-          {!SOCIAL_AVAILABLE && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.rowCol}>
-                <Text style={styles.warnText}>{o.notConfigured}</Text>
+        ) : !social.enabled ? (
+          <Pressable style={styles.card} onPress={onOpenAccount}>
+            <View style={styles.row}>
+              <Icon name="users" size={18} stroke={colors.ink3} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>{o.needAccount}</Text>
+                <Text style={styles.rowSub}>{o.needAccountSub}</Text>
               </View>
-            </>
-          )}
-
-          {social.enabled && (
-            <>
-              <View style={styles.divider} />
-              <View style={styles.rowCol}>
-                <Text style={styles.fieldLabel}>{o.displayName}</Text>
+              <Icon name="chev" size={14} stroke={colors.ink4} />
+            </View>
+          </Pressable>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.rowCol}>
+              <Text style={styles.fieldLabel}>{o.addFriend}</Text>
+              <View style={styles.inlineRow}>
                 <TextInput
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  onBlur={() => {
-                    const name = displayName.trim();
-                    if (name && name !== social.displayName) {
-                      void run('name', async () => {
-                        await enableSocial(name);
-                        setSocial({ displayName: name });
-                      });
-                    }
-                  }}
-                  placeholder={o.displayNamePlaceholder}
+                  value={friendQuery}
+                  onChangeText={setFriendQuery}
+                  placeholder={o.addFriendPlaceholder}
                   placeholderTextColor={colors.ink4}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
                   style={styles.input}
-                  maxLength={40}
+                  onSubmitEditing={() => { if (friendQuery.trim()) void invite(friendQuery); }}
+                  returnKeyType="send"
                 />
-                <Text style={styles.fieldHint}>{o.displayNameHint}</Text>
+                <Pressable
+                  onPress={() => { if (friendQuery.trim()) void invite(friendQuery); }}
+                  disabled={!friendQuery.trim() || busy === 'add'}
+                  style={[styles.primaryBtn, !friendQuery.trim() && styles.btnOff]}
+                >
+                  {busy === 'add'
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={styles.primaryBtnText}>{o.send}</Text>}
+                </Pressable>
               </View>
-
-              <View style={styles.divider} />
-              <View style={styles.rowCol}>
-                <Text style={styles.fieldLabel}>{o.redeemLabel}</Text>
-                <View style={styles.inlineRow}>
-                  <TextInput
-                    value={redeemCode}
-                    onChangeText={setRedeemCode}
-                    placeholder={o.redeemPlaceholder}
-                    placeholderTextColor={colors.ink4}
-                    autoCapitalize="characters"
-                    style={[styles.input, styles.codeInput]}
-                    maxLength={16}
-                  />
-                  <Pressable
-                    onPress={doRedeem}
-                    disabled={!redeemCode.trim() || busy === 'redeem'}
-                    style={[styles.primaryBtn, !redeemCode.trim() && styles.btnOff]}
-                  >
-                    {busy === 'redeem'
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={styles.primaryBtnText}>{o.redeem}</Text>}
-                  </Pressable>
-                </View>
-                <Text style={styles.fieldHint}>{o.redeemHint}</Text>
-              </View>
-            </>
-          )}
-        </View>
+              <Text style={styles.fieldHint}>{o.addFriendHint(social.handle)}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
+      {!!notice && (
+        <View style={styles.noticeBox}><Text style={styles.noticeText}>{notice}</Text></View>
+      )}
       {!!error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>
+      )}
+
+      {/* Pedidos recebidos */}
+      {incoming.length > 0 && (
+        <View>
+          <Text style={styles.sectionLabel}>{o.incomingLabel}</Text>
+          {incoming.map(r => (
+            <View key={r.id} style={styles.requestCard}>
+              <Text style={styles.requestName}>@{r.otherHandle}</Text>
+              <View style={styles.requestActions}>
+                {busy === r.id ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <>
+                    <Pressable onPress={() => void answer(r, false)} hitSlop={8}>
+                      <Text style={[styles.linkAction, { color: colors.ink3 }]}>{o.decline}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => void answer(r, true)} hitSlop={8}>
+                      <Text style={styles.linkAction}>{o.accept}</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Pedidos enviados */}
+      {outgoing.length > 0 && (
+        <View>
+          <Text style={styles.sectionLabel}>{o.outgoingLabel}</Text>
+          {outgoing.map(r => (
+            <View key={r.id} style={styles.requestCard}>
+              <Text style={styles.requestName}>@{r.otherHandle}</Text>
+              <Text style={styles.waitingText}>{o.waiting}</Text>
+            </View>
+          ))}
         </View>
       )}
 
@@ -299,75 +331,68 @@ export function OpponentsScreen({ onBack }: { onBack: () => void }) {
                 <Text style={styles.opponentName}>{opponent.nickname}</Text>
                 <Text style={styles.opponentMeta}>
                   {o.matchCount(counts.get(opponent.id) ?? 0)}
-                  {opponent.linkState === 'linked' && opponent.remoteName
-                    ? ` · ${o.linkedAs(opponent.remoteName)}`
-                    : ''}
+                  {opponent.remoteName ? ` · @${opponent.remoteName}` : ''}
                 </Text>
               </View>
 
               <View style={[
                 styles.tag,
                 opponent.linkState === 'linked' && styles.tagLinked,
-                opponent.linkState === 'invited' && styles.tagInvited,
+                opponent.linkState === 'requested' && styles.tagInvited,
               ]}>
                 <Text style={[
                   styles.tagText,
                   opponent.linkState === 'linked' && styles.tagTextLinked,
-                  opponent.linkState === 'invited' && styles.tagTextInvited,
+                  opponent.linkState === 'requested' && styles.tagTextInvited,
                 ]}>
                   {o.state[opponent.linkState]}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.opponentActions}>
-              {social.enabled && opponent.linkState !== 'linked' && (
-                <Pressable onPress={() => startInvite(opponent)} hitSlop={8}>
+            {linkingId === opponent.id ? (
+              <View style={styles.inlineRow}>
+                <TextInput
+                  autoFocus
+                  value={linkQuery}
+                  onChangeText={setLinkQuery}
+                  placeholder={o.addFriendPlaceholder}
+                  placeholderTextColor={colors.ink4}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  style={styles.input}
+                  onSubmitEditing={() => { if (linkQuery.trim()) void invite(linkQuery, opponent.id); }}
+                  returnKeyType="send"
+                />
+                <Pressable
+                  onPress={() => { if (linkQuery.trim()) void invite(linkQuery, opponent.id); }}
+                  disabled={!linkQuery.trim() || busy === opponent.id}
+                  style={[styles.primaryBtn, !linkQuery.trim() && styles.btnOff]}
+                >
                   {busy === opponent.id
-                    ? <ActivityIndicator size="small" color={colors.accent} />
-                    : (
-                      <Text style={styles.linkAction}>
-                        {opponent.linkState === 'invited' ? o.showInvite : o.invite}
-                      </Text>
-                    )}
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={styles.primaryBtnText}>{o.send}</Text>}
                 </Pressable>
-              )}
-              {opponent.linkState === 'invited' && opponent.inviteCode && (
-                <Pressable onPress={() => setShowQr(opponent.inviteCode!)} hitSlop={8}>
-                  <Text style={styles.linkAction}>{o.showQr}</Text>
+              </View>
+            ) : (
+              <View style={styles.opponentActions}>
+                {social.enabled && opponent.linkState === 'local' && (
+                  <Pressable
+                    onPress={() => { setLinkingId(opponent.id); setLinkQuery(''); }}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.linkAction}>{o.link}</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => confirmDelete(opponent)} hitSlop={8}>
+                  <Text style={[styles.linkAction, { color: colors.bad }]}>{o.delete}</Text>
                 </Pressable>
-              )}
-              <Pressable onPress={() => confirmDelete(opponent)} hitSlop={8}>
-                <Text style={[styles.linkAction, { color: colors.bad }]}>{o.delete}</Text>
-              </Pressable>
-            </View>
+              </View>
+            )}
           </View>
         ))}
       </View>
-
-      {/* Convite aberto */}
-      {showQr && (
-        <View style={styles.qrCard}>
-          <Text style={styles.qrTitle}>{o.qrTitle}</Text>
-          <Text style={styles.qrBody}>{o.qrBody}</Text>
-          <View style={styles.qrBox}>
-            <QRCode value={inviteUrl(showQr)} size={168} backgroundColor="#fff" />
-          </View>
-          <Text style={styles.qrCode}>{showQr}</Text>
-          <View style={styles.qrActions}>
-            <Pressable
-              onPress={() => { void Clipboard.setStringAsync(inviteUrl(showQr)); }}
-              style={styles.ghostBtn}
-            >
-              <Text style={styles.ghostBtnText}>{o.copyLink}</Text>
-            </Pressable>
-            <Pressable onPress={() => setShowQr(null)} style={styles.ghostBtn}>
-              <Text style={styles.ghostBtnText}>{o.close}</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.qrExpiry}>{o.qrExpiry}</Text>
-        </View>
-      )}
 
       <View style={{ height: 28 }} />
     </ScrollView>
@@ -402,7 +427,6 @@ const styles = StyleSheet.create({
   },
   rowCol: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   inlineRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  divider: { height: 1, backgroundColor: colors.line2 },
   rowTitle: { fontSize: 13, fontWeight: '500', fontFamily: 'Inter', color: colors.ink },
   rowSub: { fontSize: 11, fontFamily: 'Inter', color: colors.ink3, marginTop: 2, lineHeight: 16 },
   fieldLabel: {
@@ -417,7 +441,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line, borderRadius: 8,
     backgroundColor: colors.bg,
   },
-  codeInput: { fontFamily: 'JetBrainsMono', letterSpacing: 1 },
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 14, paddingVertical: 11,
@@ -426,11 +449,32 @@ const styles = StyleSheet.create({
   primaryBtnText: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter', color: '#fff' },
   btnOff: { opacity: 0.4 },
 
+  noticeBox: {
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(45,138,94,0.4)',
+    backgroundColor: colors.goodSoft, padding: 12,
+  },
+  noticeText: { fontSize: 12, fontFamily: 'Inter', color: colors.good, lineHeight: 17 },
   errorBox: {
     borderRadius: 12, borderWidth: 1, borderColor: 'rgba(192,66,42,0.4)',
     backgroundColor: colors.badSoft, padding: 12,
   },
   errorText: { fontSize: 12, fontFamily: 'Inter', color: colors.bad, lineHeight: 17 },
+
+  requestCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8,
+  },
+  requestName: {
+    flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: 'JetBrainsMono', color: colors.ink,
+  },
+  requestActions: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  waitingText: {
+    fontSize: 10, fontFamily: 'JetBrainsMono', letterSpacing: 0.5,
+    textTransform: 'uppercase', color: colors.ink4,
+  },
 
   opponentCard: {
     borderRadius: 14, borderWidth: 1, borderColor: colors.line,
@@ -460,26 +504,4 @@ const styles = StyleSheet.create({
     fontSize: 12, fontFamily: 'Inter', color: colors.ink4,
     textAlign: 'center', lineHeight: 18,
   },
-
-  qrCard: {
-    borderRadius: 16, borderWidth: 1.5, borderColor: colors.accent,
-    backgroundColor: colors.surface, padding: 18, alignItems: 'center', gap: 10,
-  },
-  qrTitle: { fontSize: 15, fontWeight: '700', fontFamily: 'Inter', color: colors.ink },
-  qrBody: {
-    fontSize: 12, fontFamily: 'Inter', color: colors.ink3,
-    textAlign: 'center', lineHeight: 17,
-  },
-  qrBox: { padding: 12, backgroundColor: '#fff', borderRadius: 12 },
-  qrCode: {
-    fontSize: 16, fontFamily: 'JetBrainsMono', letterSpacing: 2,
-    color: colors.ink, marginTop: 2,
-  },
-  qrActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  ghostBtn: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
-    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg,
-  },
-  ghostBtnText: { fontSize: 12, fontFamily: 'Inter', fontWeight: '500', color: colors.ink2 },
-  qrExpiry: { fontSize: 10, fontFamily: 'Inter', color: colors.ink4 },
 });
