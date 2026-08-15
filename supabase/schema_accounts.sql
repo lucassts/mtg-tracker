@@ -99,6 +99,11 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+-- As colunas de saída se chamam `id` e `handle`, iguais às da tabela, e o
+-- `on conflict (id)` abaixo fica ambíguo sem isto: o PL/pgSQL não sabe se o
+-- nome é a variável de saída ou a coluna. Manter os nomes de saída é o que
+-- deixa a resposta legível para o cliente, então quem cede é a resolução.
+#variable_conflict use_column
 declare
   me    uuid := auth.uid();
   clean text := lower(trim(coalesce(p_handle, '')));
@@ -138,8 +143,14 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+-- Mesmo motivo do `register_player`: `id` e `handle` são coluna e variável de
+-- saída ao mesmo tempo.
+#variable_conflict use_column
 declare
-  q text := lower(trim(coalesce(p_query, '')));
+  -- O `@` do prefixo sai ANTES de decidir o ramo. A interface ensina a
+  -- procurar por "@apelido", e sem isto todo apelido digitado assim caía no
+  -- ramo de e-mail e não achava ninguém.
+  q text := ltrim(lower(trim(coalesce(p_query, ''))), '@');
 begin
   if auth.uid() is null then
     raise exception 'precisa estar autenticado';
@@ -159,7 +170,7 @@ begin
     return query
       select p.id, p.handle
       from public.players p
-      where p.handle = ltrim(q, '@')
+      where p.handle = q
       limit 1;
   end if;
 end;
@@ -240,11 +251,14 @@ $$;
  * Aceitar cria o vínculo, que é o que libera confirmar partida.
  */
 create or replace function public.resolve_friend_request(p_id uuid, p_accept boolean)
-returns table (other_id uuid, other_handle text, status public.friend_status)
+returns table (other_id uuid, other_handle text, new_status public.friend_status)
 language plpgsql
 security definer
 set search_path = public
 as $$
+-- A saída se chama `new_status`, e não `status`, para não colidir com a coluna
+-- de mesmo nome em `friend_requests`.
+#variable_conflict use_column
 declare
   fr public.friend_requests;
   me uuid := auth.uid();
@@ -330,13 +344,18 @@ $$;
 
 -- ─── Permissões ─────────────────────────────────────────────
 
-revoke all on function public.register_player(text)                from public;
-revoke all on function public.find_player(text)                    from public;
-revoke all on function public.send_friend_request(text)            from public;
-revoke all on function public.resolve_friend_request(uuid, boolean) from public;
-revoke all on function public.list_friend_requests()               from public;
-revoke all on function public.list_friends()                       from public;
-revoke all on function public.remove_friend(uuid)                  from public;
+-- Revogar de `public` não basta: o Supabase concede EXECUTE a `anon`
+-- explicitamente, por default privileges, e essa concessão sobrevive ao
+-- revoke genérico. Sem tirar de `anon`, `list_friends` e `list_friend_requests`
+-- ficam chamáveis sem login — hoje devolvem vazio porque filtram por
+-- `auth.uid()`, mas isso é sorte do filtro, não desenho.
+revoke all on function public.register_player(text)                from public, anon;
+revoke all on function public.find_player(text)                    from public, anon;
+revoke all on function public.send_friend_request(text)            from public, anon;
+revoke all on function public.resolve_friend_request(uuid, boolean) from public, anon;
+revoke all on function public.list_friend_requests()               from public, anon;
+revoke all on function public.list_friends()                       from public, anon;
+revoke all on function public.remove_friend(uuid)                  from public, anon;
 
 grant execute on function public.register_player(text)                to authenticated;
 grant execute on function public.find_player(text)                    to authenticated;
