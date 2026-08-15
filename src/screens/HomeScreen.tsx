@@ -15,11 +15,12 @@ import { Badge } from '../components/Badge';
 import { Icon } from '../components/Icon';
 import { MatchForm } from '../components/MatchForm';
 import { useStore } from '../store/useStore';
-import { useRecentDecks } from '../store/selectors';
+import { useRecentDecks, useKnownNames } from '../store/selectors';
 import { useT } from '../i18n/useT';
 import { extractMatch, getLlamaContext, getModelSize, MODEL_LABEL } from '../services/llamaExtractor';
 import { ModelDownloadScreen } from './ModelDownloadScreen';
 import { AI_AVAILABLE } from '../config';
+import type { ExtractedMatch, Match } from '../types';
 
 type State = 'idle' | 'recording' | 'processing';
 /**
@@ -84,8 +85,38 @@ export function HomeScreen() {
   const navigation = useNavigation<any>();
   const settings = useStore(s => s.settings);
   const recentDecks = useRecentDecks();
+  const known = useKnownNames();
+  const opponents = useStore(s => s.opponents);
+  const venues = useStore(s => s.venues);
   const addMatch = useStore(s => s.addMatch);
   const setPendingReview = useStore(s => s.setPendingReview);
+
+  /**
+   * Converte o que a IA devolveu nos campos da partida.
+   *
+   * `opponent` e `venue` são nomes; a partida guarda nome E id. Quando o nome
+   * bate com um cadastro — e bate, porque a extração já encaixou nos nomes
+   * conhecidos — o id vem junto, e é ele que faz a partida entrar na conta do
+   * oponente e no aproveitamento por local. Sem resolver aqui, a pessoa teria
+   * que reescolher na mão o oponente que ela acabou de dizer em voz alta.
+   */
+  const toMatchFields = React.useCallback(
+    (e: Partial<ExtractedMatch>): Partial<Match> => {
+      const { opponent, venue, ...rest } = e;
+      const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+      const op = opponent ? opponents.find(o => eq(o.nickname, opponent)) : undefined;
+      const vn = venue ? venues.find(v => eq(v.name, venue)) : undefined;
+
+      return {
+        ...rest,
+        opponentName: opponent || undefined,
+        opponentId: op?.id,
+        venueName: venue || undefined,
+        venueId: vn?.id,
+      };
+    },
+    [opponents, venues]
+  );
 
   const [state, setState] = React.useState<State>('idle');
   const [overlay, setOverlay] = React.useState<null | 'type' | 'form'>(null);
@@ -211,7 +242,7 @@ export function HomeScreen() {
       : `Gravação de ${fmt(elapsed)} analisada.`;
 
     try {
-      const extracted = await extractMatch(transcript);
+      const extracted = await extractMatch(transcript, known);
       Animated.timing(bgAnim, { toValue: 0, duration: 350, useNativeDriver: false }).start();
       setState('idle');
       setPendingReview({
@@ -230,7 +261,7 @@ export function HomeScreen() {
           onPlay:    false,
           won:       false,
           notes:     '',
-          ...extracted,
+          ...toMatchFields(extracted),
         },
       });
       navigation.navigate('Review');
@@ -250,7 +281,7 @@ export function HomeScreen() {
     Animated.timing(bgAnim, { toValue: 1, duration: 350, useNativeDriver: false }).start();
 
     try {
-      const extracted = await extractMatch(text);
+      const extracted = await extractMatch(text, known);
       setPendingReview({
         transcript: text,
         duration: 0,
@@ -267,7 +298,7 @@ export function HomeScreen() {
           onPlay:    false,
           won:       false,
           notes:     '',
-          ...extracted,
+          ...toMatchFields(extracted),
         },
       });
       navigation.navigate('Review');

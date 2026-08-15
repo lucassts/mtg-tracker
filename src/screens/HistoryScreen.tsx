@@ -11,6 +11,7 @@ import { MatchForm } from '../components/MatchForm';
 import { useStore } from '../store/useStore';
 import { useRecentDecks } from '../store/selectors';
 import { useT } from '../i18n/useT';
+import { useTabReset } from '../hooks/useTabReset';
 
 function groupByDate(matches: Match[], locale: string) {
   const g: Record<string, Match[]> = {};
@@ -32,6 +33,9 @@ export function HistoryScreen() {
   const recentDecks = useRecentDecks();
   const updateMatch = useStore(s => s.updateMatch);
   const [editMatch, setEditMatch] = React.useState<Match | null>(null);
+
+  // Tocar em "Partidas" fecha a edição aberta e volta para a lista.
+  useTabReset(React.useCallback(() => setEditMatch(null), []));
 
   const locale = settings.language === 'ja-JP' ? 'ja-JP' : settings.language === 'en-US' ? 'en-US' : 'pt-BR';
   const grouped = React.useMemo(() => groupByDate(matches, locale), [matches, locale]);

@@ -16,13 +16,18 @@ import { exportCSV } from '../utils/exportCsv';
 import { readTextFile } from '../utils/readTextFile';
 import { Language } from '../types';
 import { useT } from '../i18n/useT';
+import { useTabReset } from '../hooks/useTabReset';
 import { TELEMETRY_CONFIGURED } from '../config';
+import { deleteModel, getModelSize } from '../services/llamaExtractor';
 import { DecksScreen } from './DecksScreen';
 import { CountersSettingsScreen } from './CountersSettingsScreen';
 import { ShareSettingsScreen } from './ShareSettingsScreen';
 import { OpponentsScreen } from './OpponentsScreen';
 import { AccountScreen } from './AccountScreen';
 import { ClaimsScreen } from './ClaimsScreen';
+
+/** MB inteiros, que é a unidade em que a pessoa pensa espaço no celular. */
+const mb = (bytes: number) => Math.round(bytes / 1024 / 1024);
 
 /** Página de doações do autor. */
 const KOFI_URL = 'https://ko-fi.com/cathar1no';
@@ -81,6 +86,22 @@ export function SettingsScreen() {
   const [importStatus, setImportStatus] = React.useState<null | 'ok' | 'err'>(null);
   const [importCount, setImportCount] = React.useState(0);
 
+  /** Bytes do modelo no aparelho. 0 = não baixado. */
+  const [modelBytes, setModelBytes] = React.useState(0);
+  React.useEffect(() => {
+    void getModelSize().then(setModelBytes).catch(() => setModelBytes(0));
+  }, []);
+
+  // Tocar em "Config" volta para a raiz, venha de onde vier.
+  useTabReset(React.useCallback(() => {
+    setShowDecks(false);
+    setShowCounters(false);
+    setShowShare(false);
+    setShowAccount(false);
+    setShowOpponents(false);
+    setShowClaims(false);
+  }, []));
+
   const set = (k: any, v: any) => updateSettings({ [k]: v });
 
   const handleExport = async () => {
@@ -118,6 +139,29 @@ export function SettingsScreen() {
       setImportStatus('err');
       setTimeout(() => setImportStatus(null), 3500);
     }
+  };
+
+  /**
+   * Remover o modelo é sobre espaço: são ~350 MB parados para quem só usa o
+   * formulário. Nada se perde — a próxima gravação oferece baixar de novo.
+   */
+  const handleDeleteModel = () => {
+    Alert.alert(s.modelDeleteTitle, s.modelDeleteBody(mb(modelBytes)), [
+      { text: s.deleteConfirmCancel, style: 'cancel' },
+      {
+        text: s.modelRemove,
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            try {
+              await deleteModel();
+            } finally {
+              setModelBytes(await getModelSize());
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   const handleDelete = () => {
@@ -346,6 +390,20 @@ export function SettingsScreen() {
             </>
           )}
           <View style={styles.rowDivider} />
+          {/* Modelo de IA — só oferece remover quando há o que remover. */}
+          <Row onPress={modelBytes > 0 ? handleDeleteModel : undefined}>
+            <Icon name="mic" size={18} stroke={modelBytes > 0 ? colors.ink3 : colors.ink4} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>{s.model}</Text>
+              <Text style={styles.rowSub}>
+                {modelBytes > 0 ? s.modelPresent(mb(modelBytes)) : s.modelAbsent}
+              </Text>
+            </View>
+            {modelBytes > 0 && (
+              <Text style={styles.modelAction}>{s.modelRemove}</Text>
+            )}
+          </Row>
+          <View style={styles.rowDivider} />
           <Row onPress={handleDelete}>
             <Icon name="trash" size={18} stroke={colors.bad} />
             <Text style={[styles.rowTitle, { flex: 1, color: colors.bad }]}>{s.deleteAll}</Text>
@@ -411,6 +469,12 @@ const styles = StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.line2 },
   rowDivider: { height: 1, backgroundColor: colors.line2 },
   rowTitle: { fontSize: 13, fontWeight: '500', fontFamily: 'Inter', color: colors.ink },
+  modelAction: {
+    fontSize: 12,
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    color: colors.bad,
+  },
   rowSub: {
     fontSize: 11,
     fontFamily: 'Inter',

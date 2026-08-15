@@ -247,6 +247,10 @@ export interface ExtractedMatch {
   format: Format;
   onPlay: boolean;
   archetype: Archetype;
+  /** Nome da pessoa, já encaixado num oponente cadastrado quando reconhecido. */
+  opponent: string;
+  /** Nome do local, idem contra os locais já usados. */
+  venue: string;
   notes: string;
 }
 

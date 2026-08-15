@@ -52,9 +52,18 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       }
     ]}>
       {tabs.map((tab) => {
-        const isFocused = state.index === state.routes.findIndex((r: any) => r.name === tab.name);
+        const routeIndex = state.routes.findIndex((r: any) => r.name === tab.name);
+        const isFocused = state.index === routeIndex;
         const onPress = () => {
-          const event = navigation.emit({ type: 'tabPress', target: tab.name, canPreventDefault: true });
+          // O alvo do evento é a CHAVE da rota, não o nome: é por ela que o
+          // React Navigation entrega o `tabPress` ao listener da tela. Com o
+          // nome, o evento saía e não chegava em ninguém — que é o motivo de
+          // tocar na aba já aberta não fazer nada.
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: state.routes[routeIndex]?.key,
+            canPreventDefault: true,
+          });
           if (!event.defaultPrevented) {
             if (tab.name === 'HomeStack') {
               // Sempre reseta o stack para Home, independente de onde estava

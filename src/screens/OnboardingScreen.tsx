@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet,
+  View, Text, Pressable, ScrollView, StyleSheet, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
@@ -10,6 +10,8 @@ import { Badge } from '../components/Badge';
 import { Format } from '../types';
 import { useStore } from '../store/useStore';
 import { useT } from '../i18n/useT';
+import { SOCIAL_AVAILABLE } from '../services/supabase';
+import { signUp, AuthError, HANDLE_RE, normalizeHandle } from '../services/social';
 
 const FORMATS = [
   { l: 'Commander', s: 'EDH · 4p' },
@@ -22,10 +24,10 @@ const FORMATS = [
   { l: 'Other', s: '—' },
 ];
 
-function Dots({ step }: { step: number }) {
+function Dots({ step, total }: { step: number; total: number }) {
   return (
     <View style={styles.dots}>
-      {[1, 2, 3, 4].map(i => (
+      {Array.from({ length: total }, (_, i) => i + 1).map(i => (
         <View
           key={i}
           style={[
@@ -38,26 +40,84 @@ function Dots({ step }: { step: number }) {
   );
 }
 
+const MIN_PASSWORD = 8;
+
 export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const t = useT();
   const o = t.onboarding;
+  const a = t.account;
   const [step, setStep] = React.useState(1);
   const [fmt, setFmt] = React.useState<Format>('Commander');
   const [deck, setDeck] = React.useState('');
   const [share, setShare] = React.useState(true);
   const updateSettings = useStore(s => s.updateSettings);
+  const setSocial = useStore(s => s.setSocial);
+
+  // A conta é o último passo, e só existe quando há servidor: num build sem
+  // Supabase configurado o passo seria uma tela que não faz nada.
+  const LAST = SOCIAL_AVAILABLE ? 5 : 4;
+
+  const [email, setEmail] = React.useState('');
+  const [handle, setHandle] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const cleanHandle = normalizeHandle(handle);
+  const canCreate =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+    HANDLE_RE.test(cleanHandle) &&
+    password.length >= MIN_PASSWORD;
+
+  const finish = () => {
+    updateSettings({
+      defaultFormat: fmt,
+      defaultDeck: deck,
+      shareAnon: share,
+      onboarded: true,
+    });
+  };
+
+  /** Cria a conta e entra no app. Falhar aqui não pode prender ninguém. */
+  const createAccount = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const player = await signUp(email, cleanHandle, password);
+      setSocial({
+        enabled: true,
+        playerId: player.id,
+        handle: player.handle,
+        email: email.trim().toLowerCase(),
+      });
+      finish();
+    } catch (e) {
+      const map: Record<string, string> = {
+        'invalid-handle': a.errInvalidHandle,
+        'handle-taken': a.errHandleTaken,
+        'email-taken': a.errEmailTaken,
+        'bad-credentials': a.errCredentials,
+        'needs-confirmation': a.errConfirmation,
+        'weak-password': a.errWeakPassword,
+      };
+      setError(
+        e instanceof AuthError
+          ? (map[e.kind] ?? e.message)
+          : e instanceof Error ? e.message : String(e)
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const next = () => {
-    if (step < 4) {
+    if (step < LAST) {
       setStep(step + 1);
+    } else if (step === 5) {
+      void createAccount();
     } else {
-      updateSettings({
-        defaultFormat: fmt,
-        defaultDeck: deck,
-        shareAnon: share,
-        onboarded: true,
-      });
+      finish();
     }
   };
 
@@ -147,6 +207,66 @@ export function OnboardingScreen() {
             </View>
           </>
         )}
+
+        {step === 5 && (
+          <>
+            <Text style={styles.stepLabel}>{o.step5Label}</Text>
+            <Text style={styles.h2}>{o.step5Title}</Text>
+            <Text style={styles.body2}>{o.step5Body}</Text>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>{a.email}</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder={a.emailPlaceholder}
+                placeholderTextColor={colors.ink4}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                style={styles.input}
+              />
+
+              <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{a.handle}</Text>
+              <View style={styles.handleRow}>
+                <Text style={styles.at}>@</Text>
+                <TextInput
+                  value={handle}
+                  onChangeText={v => setHandle(normalizeHandle(v))}
+                  placeholder={a.handlePlaceholder}
+                  placeholderTextColor={colors.ink4}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={20}
+                  style={[styles.input, styles.handleInput]}
+                />
+              </View>
+              <Text style={styles.hint}>{a.handleHint}</Text>
+
+              <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{a.password}</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder={a.passwordPlaceholder}
+                placeholderTextColor={colors.ink4}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                style={styles.input}
+              />
+            </View>
+
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <Text style={styles.hint}>{a.noVerification}</Text>
+          </>
+        )}
       </ScrollView>
 
       {/*
@@ -154,12 +274,29 @@ export function OnboardingScreen() {
         SDK 54). Sem a folga de baixo, o botão fica atrás dos botões do Android.
       */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-        <Dots step={step} />
-        <Pressable style={styles.cta} onPress={next}>
-          <Text style={styles.ctaText}>
-            {step === 4 ? o.start : o.continue}
-          </Text>
+        <Dots step={step} total={LAST} />
+        <Pressable
+          style={[styles.cta, step === 5 && (!canCreate || busy) && styles.ctaOff]}
+          onPress={next}
+          disabled={step === 5 && (!canCreate || busy)}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.ctaText}>
+              {step === LAST ? (step === 5 ? a.signUp : o.start) : o.continue}
+            </Text>
+          )}
         </Pressable>
+
+        {/* Sair sem conta é um caminho de primeira classe: o app inteiro
+            funciona sem ela, e prender alguém num cadastro na primeira tela é
+            a forma mais rápida de fazer a pessoa desinstalar. */}
+        {step === 5 && (
+          <Pressable onPress={finish} disabled={busy} style={styles.skipBtn}>
+            <Text style={styles.skipText}>{o.step5Skip}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -280,6 +417,34 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter',
     color: colors.ink,
   },
+  input: {
+    fontSize: 14,
+    fontFamily: 'Inter',
+    color: colors.ink,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+    marginTop: 6,
+    flex: 1,
+  },
+  handleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  at: { fontSize: 16, fontFamily: 'JetBrainsMono', color: colors.ink4, marginTop: 6 },
+  handleInput: { fontFamily: 'JetBrainsMono' },
+  hint: { fontSize: 11, fontFamily: 'Inter', color: colors.ink4, lineHeight: 16, marginTop: 6 },
+  errorBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(192,66,42,0.4)',
+    backgroundColor: colors.badSoft,
+    padding: 12,
+  },
+  errorText: { fontSize: 12, fontFamily: 'Inter', color: colors.bad, lineHeight: 17 },
+  ctaOff: { opacity: 0.35 },
+  skipBtn: { paddingVertical: 12, alignItems: 'center' },
+  skipText: { fontSize: 13, fontFamily: 'Inter', fontWeight: '500', color: colors.ink3 },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',

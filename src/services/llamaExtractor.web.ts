@@ -45,10 +45,25 @@ export async function releaseLlamaContext(): Promise<void> {
   // Nada para liberar.
 }
 
+/** Nunca há o que apagar no navegador. */
+export async function deleteModel(): Promise<number> {
+  return 0;
+}
+
 export function isLlamaLoading(): boolean {
   return false;
 }
 
-export async function extractMatch(_text: string): Promise<Partial<ExtractedMatch>> {
+export interface KnownNames {
+  decks?: string[];
+  oppDecks?: string[];
+  opponents?: string[];
+  venues?: string[];
+}
+
+export async function extractMatch(
+  _text: string,
+  _known: KnownNames = {}
+): Promise<Partial<ExtractedMatch>> {
   throw new UnsupportedOnWebError();
 }
