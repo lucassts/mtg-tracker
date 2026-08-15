@@ -31,6 +31,21 @@ export interface Match {
    */
   claimStatus?: 'pending' | 'confirmed' | 'disputed';
   claimId?: string;
+
+  /**
+   * Identidade da partida no servidor. É um UUID, e não o `id` local, porque
+   * o id local é sequencial deste aparelho — dois aparelhos gerariam o mesmo.
+   * Nasce na primeira subida e nunca muda: é ele que faz reenviar atualizar em
+   * vez de duplicar.
+   */
+  syncId?: string;
+
+  /**
+   * Liga esta partida à linha do oponente que descreve a MESMA partida.
+   * Com par, o deck do oponente é lido do lado dele — é o que faz a correção
+   * dele aparecer aqui.
+   */
+  pairId?: string;
 }
 
 // ─── Oponentes ──────────────────────────────────────────────

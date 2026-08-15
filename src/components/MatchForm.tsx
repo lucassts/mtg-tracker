@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Match, Settings, MatchConfidence, ConfidenceLevel } from '../types';
 import { colors } from '../theme/colors';
@@ -10,6 +10,7 @@ import { DatePickerModal } from './DatePickerModal';
 import { OpponentPicker } from './OpponentPicker';
 import { VenuePicker } from './VenuePicker';
 import { useT } from '../i18n/useT';
+import { matchesSameDay } from '../services/matchSync';
 import { getArchetypeForDeck } from '../data/decks';
 import { useStore } from '../store/useStore';
 
@@ -89,6 +90,43 @@ export function MatchForm({
   const [showDatePicker, setShowDatePicker] = React.useState(false);
 
   const set = (k: keyof Match, v: any) => setMatch(m => ({ ...m, [k]: v }));
+
+  const opponents = useStore(s => s.opponents);
+  const socialOn = useStore(s => s.settings.social.enabled);
+
+  /**
+   * Pergunta antes de gravar a segunda partida contra a mesma pessoa no mesmo
+   * dia.
+   *
+   * O caso não é distração: os dois jogadores anotam a mesma partida, cada um
+   * no próprio aparelho, e as duas viram registros separados. A checagem é no
+   * servidor porque é lá que as duas contas se encontram — o aparelho sozinho
+   * só enxerga o que ele mesmo digitou.
+   *
+   * Duas partidas contra a mesma pessoa no mesmo dia são normais (uma sessão
+   * tem várias), então isto pergunta, não bloqueia.
+   */
+  const trySave = async () => {
+    const opponent = opponents.find(o => o.id === match.opponentId);
+    const linked = socialOn && opponent?.linkState === 'linked' && opponent.playerId;
+
+    if (linked && !initial?.id) {
+      try {
+        const n = await matchesSameDay(opponent.playerId!, match.date ?? new Date().toISOString());
+        if (n > 0) {
+          Alert.alert(mf.dupTitle, mf.dupBody(opponent.nickname, n), [
+            { text: mf.dupCancel, style: 'cancel' },
+            { text: mf.dupConfirm, onPress: () => onSave(match) },
+          ]);
+          return;
+        }
+      } catch {
+        // Sem rede não dá para perguntar ao servidor. Gravar é melhor do que
+        // travar quem está no meio de um torneio.
+      }
+    }
+    onSave(match);
+  };
 
   const venues = useStore(s => s.venues);
   const selectedVenue = venues.find(v => v.id === match.venueId);
@@ -287,7 +325,7 @@ export function MatchForm({
         <Pressable style={styles.btnCancel} onPress={onCancel}>
           <Text style={styles.btnCancelText}>{mf.cancel}</Text>
         </Pressable>
-        <Pressable style={styles.btnSave} onPress={() => onSave(match)}>
+        <Pressable style={styles.btnSave} onPress={() => { void trySave(); }}>
           <Icon name="check" size={16} stroke="#fff" />
           <Text style={styles.btnSaveText}>{mf.save}</Text>
         </Pressable>

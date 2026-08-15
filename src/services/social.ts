@@ -313,14 +313,25 @@ export async function createVenue(input: {
 
 // ─── Partidas verificadas ───────────────────────────────────
 
-/** Monta o payload da reivindicação: o evento anônimo mais o local. */
+/**
+ * Monta o payload da reivindicação: o evento anônimo, o local e o id de
+ * sincronização da partida.
+ *
+ * O `match_id` é o que permite ao servidor irmanar as duas linhas quando o
+ * oponente aceitar: sem ele, a partida dele nasceria solta e a correção de
+ * deck de um lado nunca chegaria no outro.
+ */
 export function claimPayload(
   match: Match,
   installId: string,
   venueId?: string
-): TelemetryEvent & { venue_id?: string } {
+): TelemetryEvent & { venue_id?: string; match_id?: string } {
   const event = toEvent(match, installId);
-  return venueId ? { ...event, venue_id: venueId } : event;
+  return {
+    ...event,
+    ...(venueId ? { venue_id: venueId } : {}),
+    ...(match.syncId ? { match_id: match.syncId } : {}),
+  };
 }
 
 /**

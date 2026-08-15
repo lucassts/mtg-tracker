@@ -214,6 +214,13 @@ export const translations = {
       notesPlaceholder: 'Algum comentário sobre a partida…',
       cancel: 'Cancelar',
       save: 'Salvar partida',
+      dupTitle: 'Já existe partida hoje',
+      dupBody: (nome: string, n: number) =>
+        n === 1
+          ? `Você já tem 1 partida contra ${nome} hoje. Se ${nome} registrou a mesma partida, ela já está aqui — salvar agora criaria uma repetida. É outra partida?`
+          : `Você já tem ${n} partidas contra ${nome} hoje. É mais uma?`,
+      dupConfirm: 'É outra partida',
+      dupCancel: 'Cancelar',
     },
     // Life Tracker
     life: {
@@ -710,6 +717,13 @@ export const translations = {
       notesPlaceholder: 'Any thoughts about the match…',
       cancel: 'Cancel',
       save: 'Save match',
+      dupTitle: 'There is already a match today',
+      dupBody: (nome: string, n: number) =>
+        n === 1
+          ? `You already have 1 match against ${nome} today. If ${nome} logged the same one, it is already here — saving now would duplicate it. Is this a different match?`
+          : `You already have ${n} matches against ${nome} today. Is this one more?`,
+      dupConfirm: 'It is a different match',
+      dupCancel: 'Cancel',
     },
     life: {
       setupLabel: 'Life Tracker',
@@ -1197,6 +1211,13 @@ export const translations = {
       notesPlaceholder: '対戦についてのコメント…',
       cancel: 'キャンセル',
       save: '対戦を保存',
+      dupTitle: '本日すでに対戦記録があります',
+      dupBody: (nome: string, n: number) =>
+        n === 1
+          ? `本日は ${nome} との対戦がすでに1件あります。${nome} が同じ対戦を記録した場合、それがこれです — ここで保存すると重複します。別の対戦ですか？`
+          : `本日は ${nome} との対戦がすでに${n}件あります。さらに1件ですか？`,
+      dupConfirm: '別の対戦です',
+      dupCancel: 'キャンセル',
     },
     life: {
       setupLabel: 'ライフトラッカー',

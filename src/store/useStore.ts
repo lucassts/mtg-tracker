@@ -10,6 +10,7 @@ import {
 import { seedMatches } from '../data/seed';
 import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/telemetry';
 import { claimPayload, submitClaim } from '../services/social';
+import { pushMatches, pullMatches, ensureSyncId } from '../services/matchSync';
 import { getArchetypeForDeck } from '../data/decks';
 
 /** Contador local para ids: `Date.now()` colide quando dois somem no mesmo ms. */
@@ -71,6 +72,12 @@ interface AppState {
   addCustomCounter: (name: string) => CustomCounter | null;
   updateCustomCounter: (id: string, patch: Partial<Pick<CustomCounter, 'name' | 'enabled'>>) => void;
   deleteCustomCounter: (id: string) => void;
+  /**
+   * Sobe as partidas para a conta e traz o que estiver lá.
+   * Sem conta, é um no-op. Silencioso ao falhar: é cópia de segurança, não
+   * pode virar erro na cara de quem só quis anotar uma partida.
+   */
+  syncMatches: () => Promise<void>;
   /** Popula o app com partidas fictícias, para explorar as telas sem histórico. */
   loadDemoData: () => void;
   /** Tenta enviar a fila anônima. Silencioso: falha de rede não incomoda o usuário. */
@@ -109,6 +116,10 @@ export const useStore = create<AppState>()(
         const match: Match = {
           id: newId('m'),
           date: new Date().toISOString(),
+          // Nasce com o UUID de sincronização. É preciso já aqui porque a
+          // reivindicação leva esse id, e é por ele que o servidor irmana as
+          // duas linhas quando o oponente aceita.
+          syncId: ensureSyncId({} as Match),
           // Carimba a versão em uso do deck, se o usuário mantém versões.
           deckVersion: get().getCurrentVersionLabel(matchData.myDeck),
           ...matchData,
@@ -136,7 +147,13 @@ export const useStore = create<AppState>()(
 
         // Não bloqueia a UI; se falhar, fica na fila para a próxima vez.
         void get().flushTelemetry();
-        void get().claimMatch(match);
+        // A ordem importa: a partida precisa existir no servidor ANTES da
+        // reivindicação, senão o servidor não acha a linha para irmanar e os
+        // dois lados ficam soltos.
+        void (async () => {
+          await get().syncMatches();
+          await get().claimMatch(match);
+        })();
       },
 
       /**
@@ -477,6 +494,77 @@ export const useStore = create<AppState>()(
             },
           },
         }));
+      },
+
+      syncMatches: async () => {
+        const { settings, matches, opponents } = get();
+        if (!settings.social.enabled) return;
+
+        try {
+          // Carimba o UUID de quem ainda não tem, e persiste antes de subir:
+          // se o envio falhar, o id já existe e o reenvio atualiza a mesma
+          // linha em vez de criar outra.
+          const comId = matches.map(m => m.syncId ? m : { ...m, syncId: ensureSyncId(m) });
+          if (comId.some((m, i) => m !== matches[i])) set({ matches: comId });
+
+          // Só oponente com conta de verdade atravessa: o id local de um
+          // apelido sem conta não existe do outro lado.
+          const vinculados = new Set(
+            opponents.filter(o => o.linkState === 'linked' && o.playerId)
+              .map(o => o.playerId as string)
+          );
+
+          await pushMatches(comId, vinculados);
+
+          const remotas = await pullMatches();
+          if (remotas.length === 0) return;
+
+          set(state => {
+            const porSync = new Map(
+              state.matches.filter(m => m.syncId).map(m => [m.syncId as string, m])
+            );
+            const novas: Match[] = [];
+
+            remotas.forEach(r => {
+              const local = porSync.get(r.syncId);
+              if (!local) {
+                // Veio de outro aparelho ou de uma partida que o oponente
+                // registrou e esta conta aceitou.
+                novas.push({
+                  id: newId('m'),
+                  archetype: 'Midrange',
+                  onPlay: false,
+                  won: false,
+                  notes: '',
+                  myDeck: '',
+                  oppDeck: '',
+                  format: 'Other',
+                  date: new Date().toISOString(),
+                  ...r,
+                } as Match);
+                return;
+              }
+              // O servidor manda em duas coisas e só nelas: o deck do oponente,
+              // que é lido do lado dele, e o par. O resto é do aparelho.
+              porSync.set(r.syncId, {
+                ...local,
+                oppDeck: r.oppDeck ?? local.oppDeck,
+                pairId: r.pairId ?? local.pairId,
+              });
+            });
+
+            const atualizadas = state.matches.map(m =>
+              m.syncId ? (porSync.get(m.syncId) ?? m) : m
+            );
+            return {
+              matches: [...novas, ...atualizadas].sort(
+                (a, b) => b.date.localeCompare(a.date)
+              ),
+            };
+          });
+        } catch (e) {
+          console.warn('[store] sincronização de partidas falhou:', e);
+        }
       },
 
       loadDemoData: () => {

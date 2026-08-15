@@ -302,24 +302,7 @@ export function SettingsScreen() {
       <View>
         <SectionLabel label={s.data} />
         <Card>
-          <Row onPress={handleExport}>
-            <Icon name="share" size={18} stroke={colors.ink3} />
-            <Text style={[styles.rowTitle, { flex: 1 }]}>{s.export}</Text>
-            <Icon name="chev" size={14} stroke={colors.ink4} />
-          </Row>
-          <View style={styles.rowDivider} />
-          <Row onPress={handleImport}>
-            <Icon name="list" size={18} stroke={colors.ink3} />
-            <Text style={[styles.rowTitle, { flex: 1 }]}>{s.import}</Text>
-            {importStatus === 'ok' && (
-              <Text style={styles.importOk}>{s.importOk(importCount)}</Text>
-            )}
-            {importStatus === 'err' && (
-              <Text style={styles.importErr}>{s.importErr}</Text>
-            )}
-            {!importStatus && <Icon name="chev" size={14} stroke={colors.ink4} />}
-          </Row>
-          <View style={styles.rowDivider} />
+          {/* Ordem por frequência de uso: decks é rotina, CSV é ocasional. */}
           <Row onPress={() => setShowDecks(true)}>
             <Icon name="list" size={18} stroke={colors.ink3} />
             <Text style={[styles.rowTitle, { flex: 1 }]}>{s.manageDecks}</Text>
@@ -389,6 +372,24 @@ export function SettingsScreen() {
               </Row>
             </>
           )}
+          <View style={styles.rowDivider} />
+          <Row onPress={handleExport}>
+            <Icon name="share" size={18} stroke={colors.ink3} />
+            <Text style={[styles.rowTitle, { flex: 1 }]}>{s.export}</Text>
+            <Icon name="chev" size={14} stroke={colors.ink4} />
+          </Row>
+          <View style={styles.rowDivider} />
+          <Row onPress={handleImport}>
+            <Icon name="list" size={18} stroke={colors.ink3} />
+            <Text style={[styles.rowTitle, { flex: 1 }]}>{s.import}</Text>
+            {importStatus === 'ok' && (
+              <Text style={styles.importOk}>{s.importOk(importCount)}</Text>
+            )}
+            {importStatus === 'err' && (
+              <Text style={styles.importErr}>{s.importErr}</Text>
+            )}
+            {!importStatus && <Icon name="chev" size={14} stroke={colors.ink4} />}
+          </Row>
           <View style={styles.rowDivider} />
           {/* Modelo de IA — só oferece remover quando há o que remover. */}
           <Row onPress={modelBytes > 0 ? handleDeleteModel : undefined}>

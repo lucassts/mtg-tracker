@@ -31,6 +31,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
 
   const social = useStore(s => s.settings.social);
   const setSocial = useStore(s => s.setSocial);
+  const syncMatches = useStore(s => s.syncMatches);
   const opponents = useStore(s => s.opponents);
   const updateOpponent = useStore(s => s.updateOpponent);
 
@@ -84,6 +85,8 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
       });
       setEditHandle(player.handle);
       setPassword('');
+      // Entrar numa conta existente traz o historico de volta.
+      void syncMatches();
     } catch (e) {
       setError(message(e));
     } finally {
