@@ -86,7 +86,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
                 styles.fab,
                 { backgroundColor: isFocused ? colors.accent : colors.ink },
               ]}>
-                <Icon name="mic" size={24} stroke="#fff" strokeWidth={isFocused ? 2.2 : 1.8} />
+                {/* Soma, e não microfone: o botão abre a tela de registrar, e
+                    de lá dá para falar ou digitar. O microfone prometia só um
+                    dos dois caminhos. */}
+                <Icon name="plus" size={26} stroke="#fff" strokeWidth={isFocused ? 2.4 : 2} />
               </Pressable>
             </View>
           );

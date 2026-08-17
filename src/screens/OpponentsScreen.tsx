@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon';
 import { useStore } from '../store/useStore';
 import { Opponent } from '../types';
 import { useT } from '../i18n/useT';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 import { SOCIAL_AVAILABLE } from '../services/supabase';
 import {
   sendFriendRequest, listFriendRequests, resolveFriendRequest,
@@ -23,6 +24,7 @@ export function OpponentsScreen({
   const insets = useSafeAreaInsets();
   const t = useT();
   const o = t.opponents;
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
 
   const social = useStore(s => s.settings.social);
   const opponents = useStore(s => s.opponents);
@@ -170,10 +172,10 @@ export function OpponentsScreen({
 
   return (
     <ScrollView
+      {...scrollProps}
       style={styles.page}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
       <Pressable style={styles.backBtn} onPress={onBack}>
         <Icon name="back" size={16} stroke={colors.ink} />
@@ -195,6 +197,7 @@ export function OpponentsScreen({
               placeholderTextColor={colors.ink4}
               style={styles.input}
               maxLength={40}
+              onFocus={subirCampo}
               onSubmitEditing={() => { addOpponent(nickname); setNickname(''); }}
               returnKeyType="done"
             />
@@ -246,6 +249,7 @@ export function OpponentsScreen({
                   autoCorrect={false}
                   keyboardType="email-address"
                   style={styles.input}
+                  onFocus={subirCampo}
                   onSubmitEditing={() => { if (friendQuery.trim()) void invite(friendQuery); }}
                   returnKeyType="send"
                 />
@@ -362,6 +366,7 @@ export function OpponentsScreen({
                   autoCorrect={false}
                   keyboardType="email-address"
                   style={styles.input}
+                  onFocus={subirCampo}
                   onSubmitEditing={() => { if (linkQuery.trim()) void invite(linkQuery, opponent.id); }}
                   returnKeyType="send"
                 />
@@ -395,6 +400,7 @@ export function OpponentsScreen({
       </View>
 
       <View style={{ height: 28 }} />
+      <View style={{ height: folga }} />
     </ScrollView>
   );
 }

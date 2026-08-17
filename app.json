@@ -30,13 +30,13 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#f7f6f2"
+        "backgroundColor": "#17160f"
       },
       "package": "com.mtgtracker.app",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
-      "versionCode": 10
+      "versionCode": 11
     },
     "web": {
       "favicon": "./assets/favicon.png"

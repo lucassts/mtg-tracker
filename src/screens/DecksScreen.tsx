@@ -10,6 +10,7 @@ import { useDeckVersions } from '../store/selectors';
 import { Archetype, Deck, Format } from '../types';
 import { parseDecklist } from '../utils/decklist';
 import { useT } from '../i18n/useT';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 
 // ─── Lista de cartas ────────────────────────────────────────
 
@@ -20,9 +21,10 @@ import { useT } from '../i18n/useT';
  * Modern espera ver 60 e 15, e qualquer outro número denuncia linha perdida no
  * meio do caminho antes de a lista ser salva errada.
  */
-function DecklistField({ value, onChange }: {
+function DecklistField({ value, onChange, onFocus }: {
   value: string;
   onChange: (v: string) => void;
+  onFocus?: () => void;
 }) {
   const d = useT().decks;
   const parsed = React.useMemo(() => parseDecklist(value), [value]);
@@ -39,6 +41,7 @@ function DecklistField({ value, onChange }: {
         autoCapitalize="none"
         autoCorrect={false}
         style={[styles.input, styles.listArea]}
+        onFocus={onFocus}
       />
       {value.trim().length > 0 ? (
         <View style={styles.listMetaRow}>
@@ -87,7 +90,11 @@ function Chips<T extends string>({
 
 // ─── Detalhe do deck: versões ───────────────────────────────
 
-function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
+function DeckDetail({ deck, onBack, onFocus }: {
+  deck: Deck;
+  onBack: () => void;
+  onFocus?: () => void;
+}) {
   const t = useT();
   const d = t.decks;
 
@@ -168,6 +175,7 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
               else setName(deck.name);
             }}
             style={styles.input}
+            onFocus={onFocus}
           />
           <Text style={styles.fieldHint}>{d.renameHint}</Text>
 
@@ -209,6 +217,7 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
               placeholder={d.versionPlaceholder}
               placeholderTextColor={colors.ink4}
               style={styles.input}
+              onFocus={onFocus}
               onSubmitEditing={submitVersion}
             />
             <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{d.versionNotes}</Text>
@@ -219,8 +228,9 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
               placeholder={d.versionNotesPlaceholder}
               placeholderTextColor={colors.ink4}
               style={[styles.input, styles.textarea]}
+              onFocus={onFocus}
             />
-            <DecklistField value={list} onChange={setList} />
+            <DecklistField value={list} onChange={setList} onFocus={onFocus} />
             <View style={styles.formActions}>
               <Pressable
                 style={styles.btnGhost}
@@ -291,8 +301,9 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
                     value={editNotes}
                     onChangeText={setEditNotes}
                     style={[styles.input, styles.textarea, { marginTop: 10 }]}
+                    onFocus={onFocus}
                   />
-                  <DecklistField value={editList} onChange={setEditList} />
+                  <DecklistField value={editList} onChange={setEditList} onFocus={onFocus} />
                   <View style={styles.formActions}>
                     <Pressable style={styles.btnGhost} onPress={() => setEditingId(null)}>
                       <Text style={styles.btnGhostText}>{d.cancel}</Text>
@@ -392,7 +403,10 @@ function DeckDetail({ deck, onBack }: { deck: Deck; onBack: () => void }) {
 
 // ─── Lista de decks ─────────────────────────────────────────
 
-function DeckList({ onOpen }: { onOpen: (deck: Deck) => void }) {
+function DeckList({ onOpen, onFocus }: {
+  onOpen: (deck: Deck) => void;
+  onFocus?: () => void;
+}) {
   const t = useT();
   const d = t.decks;
 
@@ -468,6 +482,7 @@ function DeckList({ onOpen }: { onOpen: (deck: Deck) => void }) {
               placeholder={d.deckNamePlaceholder}
               placeholderTextColor={colors.ink4}
               style={styles.input}
+              onFocus={onFocus}
               onSubmitEditing={submit}
             />
 
@@ -503,6 +518,7 @@ function DeckList({ onOpen }: { onOpen: (deck: Deck) => void }) {
           placeholder={d.search}
           placeholderTextColor={colors.ink4}
           style={styles.input}
+          onFocus={onFocus}
         />
       )}
 
@@ -546,26 +562,28 @@ export function DecksScreen({ onBack }: { onBack: () => void }) {
   const [openId, setOpenId] = React.useState<string | null>(null);
   // Lê da store para a tela refletir edições feitas no detalhe.
   const deck = useStore(s => s.decks.find(x => x.id === openId));
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
 
   return (
     <ScrollView
+      {...scrollProps}
       style={styles.page}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
       {deck ? (
-        <DeckDetail deck={deck} onBack={() => setOpenId(null)} />
+        <DeckDetail deck={deck} onBack={() => setOpenId(null)} onFocus={subirCampo} />
       ) : (
         <>
           <Pressable style={styles.backBtnTop} onPress={onBack}>
             <Icon name="back" size={16} stroke={colors.ink} />
             <Text style={styles.backText}>{t.decks.backToSettings}</Text>
           </Pressable>
-          <DeckList onOpen={d => setOpenId(d.id)} />
+          <DeckList onOpen={d => setOpenId(d.id)} onFocus={subirCampo} />
         </>
       )}
       <View style={{ height: 32 }} />
+      <View style={{ height: folga }} />
     </ScrollView>
   );
 }

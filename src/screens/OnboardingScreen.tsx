@@ -10,6 +10,7 @@ import { Badge } from '../components/Badge';
 import { Format } from '../types';
 import { useStore } from '../store/useStore';
 import { useT } from '../i18n/useT';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 import { SOCIAL_AVAILABLE } from '../services/supabase';
 import { signUp, signIn, AuthError, HANDLE_RE, normalizeHandle } from '../services/social';
 
@@ -47,6 +48,7 @@ export function OnboardingScreen() {
   const t = useT();
   const o = t.onboarding;
   const a = t.account;
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
   const [step, setStep] = React.useState(1);
   const [fmt, setFmt] = React.useState<Format>('Commander');
   const [deck, setDeck] = React.useState('');
@@ -136,10 +138,10 @@ export function OnboardingScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        {...scrollProps}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
         {step === 1 && (
           <>
@@ -189,6 +191,7 @@ export function OnboardingScreen() {
               format={fmt}
               recentDecks={[]}
               placeholder={t.settings.defaultDeckPlaceholder}
+              onFocus={subirCampo}
             />
             <View style={[styles.card, { backgroundColor: colors.surface2 }]}>
               <Text style={styles.cardBody}>
@@ -252,6 +255,7 @@ export function OnboardingScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 style={styles.input}
+                onFocus={subirCampo}
               />
 
               {/* Apelido só existe ao criar: quem entra já tem o dele. */}
@@ -269,6 +273,7 @@ export function OnboardingScreen() {
                       autoCorrect={false}
                       maxLength={20}
                       style={[styles.input, styles.handleInput]}
+                      onFocus={subirCampo}
                     />
                   </View>
                   <Text style={styles.hint}>{a.handleHint}</Text>
@@ -286,6 +291,7 @@ export function OnboardingScreen() {
                 autoCorrect={false}
                 textContentType={mode === 'up' ? 'newPassword' : 'password'}
                 style={styles.input}
+                onFocus={subirCampo}
               />
             </View>
 
@@ -298,6 +304,7 @@ export function OnboardingScreen() {
             <Text style={styles.hint}>{a.noVerification}</Text>
           </>
         )}
+        <View style={{ height: folga }} />
       </ScrollView>
 
       {/*

@@ -12,6 +12,7 @@ import { flushQueue, newInstallId, toEvent, QUEUE_LIMIT } from '../services/tele
 import { claimPayload, submitClaim } from '../services/social';
 import { pushMatches, pullMatches, ensureSyncId } from '../services/matchSync';
 import { shouldSync, SyncOutcome } from '../utils/syncThrottle';
+import { defaultDeckVersion, lastUseOfDeck } from '../utils/deckVersion';
 import { getArchetypeForDeck } from '../data/decks';
 
 /** Contador local para ids: `Date.now()` colide quando dois somem no mesmo ms. */
@@ -159,8 +160,8 @@ export const useStore = create<AppState>()(
         // reivindicação, senão o servidor não acha a linha para irmanar e os
         // dois lados ficam soltos.
         void (async () => {
-          // : a partida precisa estar no servidor antes da reivindicacao
-          // sair, e esperar o intervalo quebraria o pareamento.
+          // O `true` fura o intervalo de um minuto: esperar aqui quebraria o
+          // pareamento.
           await get().syncMatches(true);
           await get().claimMatch(match);
         })();
@@ -347,14 +348,23 @@ export const useStore = create<AppState>()(
         }));
       },
 
+      /**
+       * A versão que uma partida nova assume quando ninguém escolheu — a mais
+       * recente entre a última usada e a última criada. Mesma regra do
+       * formulário, e de propósito: o valor gravado não pode discordar do que
+       * a tela mostrou.
+       */
       getCurrentVersionLabel: (deckName) => {
         if (!deckName) return undefined;
-        const { decks, deckVersions } = get();
+        const { decks, deckVersions, matches } = get();
         const deck = decks.find(
           d => d.name.toLowerCase() === deckName.trim().toLowerCase()
         );
-        if (!deck?.currentVersionId) return undefined;
-        return deckVersions.find(v => v.id === deck.currentVersionId)?.label;
+        if (!deck) return undefined;
+        return defaultDeckVersion(
+          deckVersions.filter(v => v.deckId === deck.id),
+          lastUseOfDeck(matches, deckName)
+        );
       },
 
       // ── Oponentes ──────────────────────────────────────────

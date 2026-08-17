@@ -17,6 +17,7 @@ import { readTextFile } from '../utils/readTextFile';
 import { Language } from '../types';
 import { useT } from '../i18n/useT';
 import { useTabReset } from '../hooks/useTabReset';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 import { TELEMETRY_CONFIGURED } from '../config';
 import { deleteModel, getModelSize } from '../services/llamaExtractor';
 import { DecksScreen } from './DecksScreen';
@@ -67,6 +68,7 @@ export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const t = useT();
   const s = t.settings;
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
   const settings = useStore(st => st.settings);
   const matches = useStore(st => st.matches);
   const recentDecks = useRecentDecks();
@@ -192,7 +194,7 @@ export function SettingsScreen() {
   const currentLang = settings.language || 'pt-BR';
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
+    <ScrollView {...scrollProps} style={styles.page} contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]} showsVerticalScrollIndicator={false}>
       <Text style={styles.pageTitle}>{s.title}</Text>
 
       {/* Defaults */}
@@ -230,6 +232,7 @@ export function SettingsScreen() {
               format={settings.defaultFormat}
               recentDecks={recentDecks}
               placeholder={s.defaultDeckPlaceholder}
+              onFocus={subirCampo}
             />
           </Row>
         </Card>
@@ -428,6 +431,7 @@ export function SettingsScreen() {
 
       <Text style={styles.version}>{s.version}</Text>
       <View style={{ height: 20 }} />
+      <View style={{ height: folga }} />
     </ScrollView>
   );
 }

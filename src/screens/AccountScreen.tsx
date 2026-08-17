@@ -7,6 +7,7 @@ import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
 import { useStore } from '../store/useStore';
 import { useT } from '../i18n/useT';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 import { SOCIAL_AVAILABLE } from '../services/supabase';
 import {
   signUp, signIn, signOut, registerHandle, currentEmail,
@@ -28,6 +29,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const a = t.account;
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
 
   const social = useStore(s => s.settings.social);
   const setSocial = useStore(s => s.setSocial);
@@ -150,10 +152,10 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScrollView
+      {...scrollProps}
       style={styles.page}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
       <Pressable style={styles.backBtn} onPress={onBack}>
         <Icon name="back" size={16} stroke={colors.ink} />
@@ -190,6 +192,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                   autoCorrect={false}
                   maxLength={20}
                   style={[styles.input, styles.handleInput]}
+                  onFocus={subirCampo}
                 />
               </View>
               <Text style={styles.fieldHint}>{a.handleHint}</Text>
@@ -262,6 +265,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 style={styles.input}
+                onFocus={subirCampo}
               />
             </View>
 
@@ -281,6 +285,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                       autoCorrect={false}
                       maxLength={20}
                       style={[styles.input, styles.handleInput]}
+                      onFocus={subirCampo}
                     />
                   </View>
                   <Text style={styles.fieldHint}>{a.handleHint}</Text>
@@ -301,6 +306,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
                 autoCorrect={false}
                 textContentType={mode === 'up' ? 'newPassword' : 'password'}
                 style={styles.input}
+                onFocus={subirCampo}
                 onSubmitEditing={() => { if (canSubmit) void submit(); }}
                 returnKeyType="go"
               />
@@ -327,6 +333,7 @@ export function AccountScreen({ onBack }: { onBack: () => void }) {
       )}
 
       <View style={{ height: 28 }} />
+      <View style={{ height: folga }} />
     </ScrollView>
   );
 }

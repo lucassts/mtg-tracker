@@ -15,6 +15,8 @@ interface DeckSelectorProps {
   format?: Format;
   recentDecks?: string[];
   placeholder?: string;
+  /** Avisa a tela de fora que este campo recebeu foco, para ela rolar até ele. */
+  onFocus?: () => void;
 }
 
 export function DeckSelector({
@@ -23,6 +25,7 @@ export function DeckSelector({
   format = 'Commander',
   recentDecks = [],
   placeholder,
+  onFocus,
 }: DeckSelectorProps) {
   const t = useT();
   const ds = t.deckSelector;
@@ -79,7 +82,7 @@ export function DeckSelector({
         value={query}
         placeholder={placeholder || ds.searchPlaceholder}
         placeholderTextColor={colors.ink4}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { setOpen(true); onFocus?.(); }}
         onChangeText={text => { setQuery(text); onChange(text); setOpen(true); }}
         style={[styles.input, open && styles.inputOpen]}
         returnKeyType="done"

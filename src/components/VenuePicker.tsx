@@ -18,6 +18,8 @@ const DEBOUNCE_MS = 350;
 interface Props {
   value?: Venue;
   onChange: (venue: Venue | undefined) => void;
+  /** Avisa a tela de fora que um campo recebeu foco, para ela rolar até ele. */
+  onFocus?: () => void;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * aparece depois da busca voltar. Oferecer "criar" antes de mostrar o que há
  * é o caminho mais curto para a base ter dez vezes a mesma loja.
  */
-export function VenuePicker({ value, onChange }: Props) {
+export function VenuePicker({ value, onChange, onFocus }: Props) {
   const t = useT();
   const v = t.venues;
 
@@ -142,6 +144,7 @@ export function VenuePicker({ value, onChange }: Props) {
         placeholder={v.searchPlaceholder}
         placeholderTextColor={colors.ink4}
         style={styles.input}
+        onFocus={onFocus}
       />
 
       <View style={styles.cityRow}>
@@ -152,6 +155,7 @@ export function VenuePicker({ value, onChange }: Props) {
           placeholder={v.cityPlaceholder}
           placeholderTextColor={colors.ink4}
           style={[styles.input, styles.cityInput]}
+          onFocus={onFocus}
         />
       </View>
 

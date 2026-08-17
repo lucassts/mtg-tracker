@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon';
 import { Toggle } from '../components/Toggle';
 import { useStore } from '../store/useStore';
 import { useT } from '../i18n/useT';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 
 /** Limite de contadores próprios. Além disso a lista deixa de ser usável em mesa. */
 const MAX_CUSTOM = 8;
@@ -16,6 +17,7 @@ export function CountersSettingsScreen({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const cs = t.counterSettings;
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
 
   const prefs = useStore(s => s.settings.counterPrefs);
   const setCounterPref = useStore(s => s.setCounterPref);
@@ -40,10 +42,10 @@ export function CountersSettingsScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <ScrollView
+      {...scrollProps}
       style={styles.page}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 12 }]}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
       <Pressable style={styles.backBtn} onPress={onBack}>
         <Icon name="back" size={16} stroke={colors.ink} />
@@ -116,6 +118,7 @@ export function CountersSettingsScreen({ onBack }: { onBack: () => void }) {
                   onChangeText={v => updateCustomCounter(cc.id, { name: v })}
                   style={styles.customInput}
                   maxLength={24}
+                  onFocus={subirCampo}
                 />
                 <Pressable onPress={() => deleteCustomCounter(cc.id)} hitSlop={8}>
                   <Icon name="trash" size={16} stroke={colors.bad} />
@@ -139,6 +142,7 @@ export function CountersSettingsScreen({ onBack }: { onBack: () => void }) {
                   placeholderTextColor={colors.ink4}
                   style={styles.customInput}
                   maxLength={24}
+                  onFocus={subirCampo}
                   onSubmitEditing={submit}
                   returnKeyType="done"
                 />
@@ -158,6 +162,7 @@ export function CountersSettingsScreen({ onBack }: { onBack: () => void }) {
       </View>
 
       <View style={{ height: 28 }} />
+      <View style={{ height: folga }} />
     </ScrollView>
   );
 }

@@ -13,6 +13,8 @@ import { useT } from '../i18n/useT';
 import { matchesSameDay } from '../services/matchSync';
 import { getArchetypeForDeck } from '../data/decks';
 import { useStore } from '../store/useStore';
+import { defaultDeckVersion, lastUseOfDeck } from '../utils/deckVersion';
+import { useKeyboardAware } from '../hooks/useKeyboardAware';
 
 interface MatchFormProps {
   initial?: Partial<Match>;
@@ -93,6 +95,7 @@ export function MatchForm({
 
   const opponents = useStore(s => s.opponents);
   const socialOn = useStore(s => s.settings.social.enabled);
+  const { scrollProps, subirCampo, folga } = useKeyboardAware();
 
   /**
    * Pergunta antes de gravar a segunda partida contra a mesma pessoa no mesmo
@@ -134,6 +137,7 @@ export function MatchForm({
   // Versões do deck escolhido, se ele for um deck cadastrado.
   const decks = useStore(s => s.decks);
   const allVersions = useStore(s => s.deckVersions);
+  const matches = useStore(s => s.matches);
   const deckVersions = React.useMemo(() => {
     const name = (match.myDeck || '').trim().toLowerCase();
     if (!name) return [];
@@ -143,6 +147,32 @@ export function MatchForm({
       .filter(v => v.deckId === deck.id)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [decks, allVersions, match.myDeck]);
+
+  /**
+   * Marca sozinho a versão provável ao escolher o deck — a mais recente entre
+   * a última usada e a última criada.
+   *
+   * Só age enquanto o jogador não mexeu no campo: a partir do primeiro toque a
+   * escolha é dele, inclusive a de jogar sem versão, e trocar de deck depois
+   * disso não deve desfazer o que ele decidiu. Partida sendo editada também
+   * não entra — ali o valor gravado é a verdade.
+   */
+  const versaoTocada = React.useRef(false);
+  const editando = Boolean(initial?.id);
+
+  React.useEffect(() => {
+    if (editando || versaoTocada.current) return;
+    const sugerida = defaultDeckVersion(
+      deckVersions,
+      lastUseOfDeck(matches, match.myDeck || '')
+    );
+    setMatch(m => (m.deckVersion === sugerida ? m : { ...m, deckVersion: sugerida }));
+  }, [deckVersions, matches, match.myDeck, editando]);
+
+  const escolherVersao = (label?: string) => {
+    versaoTocada.current = true;
+    set('deckVersion', label);
+  };
 
   // Auto-preenche arquétipo a partir da database quando oppDeck muda
   React.useEffect(() => {
@@ -162,7 +192,7 @@ export function MatchForm({
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView {...scrollProps} style={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>{resolvedTitle}</Text>
           <Text style={styles.subtitle}>
@@ -221,6 +251,7 @@ export function MatchForm({
             onChange={v => set('myDeck', v)}
             format={match.format as any}
             recentDecks={recentDecks}
+            onFocus={subirCampo}
           />
         </Field>
 
@@ -229,7 +260,7 @@ export function MatchForm({
           <Field label={mf.deckVersion} conf={conf}>
             <View style={styles.versionRow}>
               <Pressable
-                onPress={() => set('deckVersion', undefined)}
+                onPress={() => escolherVersao(undefined)}
                 style={[styles.versionChip, !match.deckVersion && styles.versionChipOn]}
               >
                 <Text style={[
@@ -242,7 +273,7 @@ export function MatchForm({
               {deckVersions.map(v => (
                 <Pressable
                   key={v.id}
-                  onPress={() => set('deckVersion', v.label)}
+                  onPress={() => escolherVersao(v.label)}
                   style={[
                     styles.versionChip,
                     match.deckVersion === v.label && styles.versionChipOn,
@@ -268,6 +299,7 @@ export function MatchForm({
             format={match.format as any}
             recentDecks={recentDecks}
             placeholder={mf.oppDeckPlaceholder}
+            onFocus={subirCampo}
           />
         </Field>
 
@@ -279,6 +311,7 @@ export function MatchForm({
             onChange={(id, name) => {
               setMatch(m => ({ ...m, opponentId: id, opponentName: name }));
             }}
+            onFocus={subirCampo}
           />
         </Field>
 
@@ -293,6 +326,7 @@ export function MatchForm({
                 venueName: venue?.name,
               }));
             }}
+            onFocus={subirCampo}
           />
         </Field>
 
@@ -314,10 +348,12 @@ export function MatchForm({
             placeholderTextColor={colors.ink4}
             multiline
             style={styles.textarea}
+            onFocus={subirCampo}
           />
         </Field>
 
         <View style={{ height: 20 }} />
+        <View style={{ height: folga }} />
       </ScrollView>
 
       {/* Folga da barra do Android: o formulário abre em modal, fora da tab bar. */}

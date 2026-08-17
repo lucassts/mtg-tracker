@@ -11,6 +11,8 @@ interface Props {
   valueId?: string;
   valueName?: string;
   onChange: (id: string | undefined, name: string | undefined) => void;
+  /** Avisa a tela de fora que o campo recebeu foco, para ela rolar até ele. */
+  onFocus?: () => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface Props {
  * a outra tela no meio de um torneio. O vínculo com a conta dele, quando
  * existir, se faz em Configurações → Oponentes.
  */
-export function OpponentPicker({ valueId, valueName, onChange }: Props) {
+export function OpponentPicker({ valueId, valueName, onChange, onFocus }: Props) {
   const t = useT();
   const op = t.opponentPicker;
 
@@ -85,6 +87,7 @@ export function OpponentPicker({ valueId, valueName, onChange }: Props) {
         placeholder={op.searchPlaceholder}
         placeholderTextColor={colors.ink4}
         style={styles.input}
+        onFocus={onFocus}
         onSubmitEditing={() => { if (query.trim()) createAndPick(); }}
         returnKeyType="done"
       />

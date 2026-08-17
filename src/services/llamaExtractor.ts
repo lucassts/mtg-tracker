@@ -80,6 +80,12 @@ function listBlock(label: string, items?: string[]): string {
  * de criar variação. Ele erra isso às vezes, e por isso a palavra final é do
  * `snapToKnown`, em código — mas dar a lista reduz muito o que sobra para
  * corrigir depois.
+ *
+ * A versão do deck não é pedida ao modelo de propósito. Ela não se decide
+ * ouvindo: decide-se comparando duas datas — a da última partida com o deck e
+ * a da última versão criada —, e essa comparação é `defaultDeckVersion`, em
+ * código. Um modelo de 0,5 B erraria uma conta que o app acerta sempre, e o
+ * campo já nasce preenchido na tela de revisão.
  */
 function buildSystemPrompt(known: KnownNames): string {
   const listas =
